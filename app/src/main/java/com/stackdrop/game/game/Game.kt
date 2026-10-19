@@ -5,7 +5,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.core.content.res.ResourcesCompat
@@ -13,14 +12,15 @@ import com.stackdrop.game.audio.Haptics
 import com.stackdrop.game.audio.SoundManager
 import com.stackdrop.game.data.SaveData
 import com.stackdrop.game.game.tower.TowerMode
+import com.stackdrop.game.platform.PlatformBridge
 import com.stackdrop.game.ui.Hud
 import com.stackdrop.game.ui.Neon
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
 
-class Game(private val context: Context) {
+class Game(private val context: Context, val bridge: PlatformBridge) {
 
-    enum class State { MENU, THEMES, PLAYING, GAME_OVER }
+    enum class State { MENU, THEMES, PLAYING, GAME_OVER, PROFILE, LEADERBOARD, FRIENDS, SETTINGS }
 
     val save = SaveData(context)
     private val sound = SoundManager(context)
@@ -51,7 +51,10 @@ class Game(private val context: Context) {
     private var height = 0
     private var fade = 0f
     private val fadePaint = Paint()
-    private val taps = ConcurrentLinkedQueue<PointF>()
+    private val touches = TouchQueue()
+    private val touchSink = TouchSink(::handleTouch)
+    private val drag = DragTracker()
+    private val events = ConcurrentLinkedQueue<GameEvent>()
 
     init {
         sound.muted = !save.soundOn
@@ -65,13 +68,18 @@ class Game(private val context: Context) {
     fun resize(w: Int, h: Int) {
         width = w
         height = h
+        drag.slop = w * TAP_SLOP
         backdrop.resize(w, h)
         hud.resize(w, h)
         modes.forEach { it.resize(w, h) }
     }
 
-    fun onTap(x: Float, y: Float) {
-        taps.add(PointF(x, y))
+    /** Called on the UI thread with a [TouchQueue] action. */
+    fun onTouch(action: Int, x: Float, y: Float) = touches.push(action, x, y)
+
+    /** Safe from any thread; applied at the start of the next update. */
+    fun post(event: GameEvent) {
+        events.add(event)
     }
 
     fun onResume() = sound.resumeMusic()
@@ -82,9 +90,12 @@ class Game(private val context: Context) {
 
     fun update(dt: Float) {
         while (true) {
-            val tap = taps.poll() ?: break
-            handleTap(tap.x, tap.y)
+            val event = events.poll() ?: break
+            handleEvent(event)
         }
+        touches.drain(touchSink)
+        val glide = drag.update(dt)
+        if (glide != 0f) hud.onDrag(glide)
 
         time += dt
         stateTime += dt
@@ -97,62 +108,31 @@ class Game(private val context: Context) {
         hud.update(dt)
     }
 
-    private fun handleTap(x: Float, y: Float) {
-        when (state) {
-            State.MENU -> {
-                val card = hud.modeCardAt(x, y)
-                when {
-                    card >= 0 -> {
-                        press(hud.modeCards[card])
-                        startMode(modes[card])
-                    }
-                    hud.themesButton.contains(x, y) -> {
-                        press(hud.themesButton)
-                        sound.play(SoundManager.BUTTON)
-                        setState(State.THEMES)
-                    }
-                    hud.soundButton.contains(x, y) -> {
-                        press(hud.soundButton)
-                        toggleSound()
-                    }
-                    hud.vibrationButton.contains(x, y) -> {
-                        hud.press(hud.vibrationButton)
-                        toggleVibration()
-                    }
-                    hud.giftButton.contains(x, y) -> {
-                        press(hud.giftButton)
-                        claimDaily()
-                    }
-                    else -> startMode(mode)
-                }
+    private fun handleTouch(action: Int, x: Float, y: Float) {
+        when (action) {
+            TouchQueue.DOWN -> {
+                drag.down(x, y)
+                if (!hud.tapsOnUp) hud.onTap(x, y)
             }
-            State.THEMES -> {
-                if (hud.backButton.contains(x, y)) {
-                    press(hud.backButton)
-                    sound.play(SoundManager.BUTTON)
-                    setState(State.MENU)
-                } else {
-                    val row = hud.themeRowAt(x, y)
-                    if (row >= 0) selectTheme(row)
-                }
+            TouchQueue.MOVE -> {
+                val dy = drag.move(x, y)
+                if (dy != 0f) hud.onDrag(dy)
             }
-            State.PLAYING -> if (!mode.isOver) mode.onTap()
-            State.GAME_OVER -> {
-                if (stateTime < RESTART_DELAY) return
-                if (hud.menuButton.contains(x, y)) {
-                    press(hud.menuButton)
-                    sound.play(SoundManager.BUTTON)
-                    mode.reset(theme)
-                    setState(State.MENU, withFade = true)
-                } else {
-                    press(hud.retryButton)
-                    startMode(mode)
-                }
-            }
+            TouchQueue.UP -> if (drag.up() && hud.tapsOnUp) hud.onTap(x, y)
+            TouchQueue.CANCEL -> drag.cancel()
         }
     }
 
-    private fun press(r: RectF) {
+    private fun handleEvent(event: GameEvent) {
+        when (event) {
+            GameEvent.Back -> if (!hud.onBack()) backToMenu()
+            is GameEvent.Toast -> hud.showBanner(event.message)
+            else -> Unit
+        }
+    }
+
+    /** Button press feedback: the shared scale bounce plus a light tick. */
+    fun press(r: RectF) {
         hud.press(r)
         haptics.ui()
     }
@@ -161,9 +141,27 @@ class Game(private val context: Context) {
         state = s
         stateTime = 0f
         if (withFade) fade = 1f
+        // A press that changed screens must not also count as a tap or drag on the new one.
+        drag.cancel()
     }
 
-    private fun startMode(m: GameMode) {
+    fun openThemes() {
+        sound.play(SoundManager.BUTTON)
+        setState(State.THEMES)
+    }
+
+    fun backToMenu() {
+        sound.play(SoundManager.BUTTON)
+        setState(State.MENU)
+    }
+
+    fun leaveGameOver() {
+        sound.play(SoundManager.BUTTON)
+        mode.reset(theme)
+        setState(State.MENU, withFade = true)
+    }
+
+    fun startMode(m: GameMode) {
         sound.play(SoundManager.BUTTON)
         mode = m
         save.lastMode = m.id
@@ -185,14 +183,14 @@ class Game(private val context: Context) {
         }
     }
 
-    private fun toggleVibration() {
+    fun toggleVibration() {
         save.vibrationOn = !save.vibrationOn
         haptics.enabled = save.vibrationOn
         sound.play(SoundManager.BUTTON)
         if (save.vibrationOn) haptics.perfect(1)
     }
 
-    private fun toggleSound() {
+    fun toggleSound() {
         save.soundOn = !save.soundOn
         sound.muted = !save.soundOn
         if (save.soundOn) {
@@ -203,7 +201,7 @@ class Game(private val context: Context) {
         }
     }
 
-    private fun claimDaily() {
+    fun claimDaily() {
         if (!save.canClaimDaily()) {
             hud.showBanner("Next gift tomorrow")
             sound.play(SoundManager.BUTTON, 0.8f)
@@ -216,7 +214,7 @@ class Game(private val context: Context) {
         confetti.confetti(width.toFloat(), 60)
     }
 
-    private fun selectTheme(index: Int) {
+    fun selectTheme(index: Int) {
         val t = Palette.themes[index]
         if (t.id == theme.id) return
         val bought = !save.isUnlocked(t.id)
@@ -273,5 +271,7 @@ class Game(private val context: Context) {
 
     companion object {
         const val RESTART_DELAY = 0.5f
+        /** A press that travels less than this share of the screen width is a tap, not a drag. */
+        private const val TAP_SLOP = 0.02f
     }
 }

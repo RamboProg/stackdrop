@@ -1,0 +1,126 @@
+package com.stackdrop.game.ui
+
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+
+/** Canvas widgets shared by every screen, plus the single press animation they all use. */
+class Widgets(private val neon: Neon) {
+
+    private val icon = Path()
+    private val box = RectF()
+    private val bannerRect = RectF()
+
+    private var w = 0f
+    private var h = 0f
+    private var u = 1f
+
+    private var pressed: RectF? = null
+    private var pressTime = 0f
+
+    fun resize(w: Float, h: Float, u: Float) {
+        this.w = w
+        this.h = h
+        this.u = u
+    }
+
+    fun press(r: RectF) {
+        pressed = r
+        pressTime = PRESS_TIME
+    }
+
+    fun update(dt: Float) {
+        pressTime = max(0f, pressTime - dt)
+    }
+
+    fun pressScale(r: RectF): Float {
+        if (pressed !== r || pressTime <= 0f) return 1f
+        val t = pressTime / PRESS_TIME
+        return 1f - 0.08f * sin(t * Math.PI.toFloat())
+    }
+
+    fun pill(
+        canvas: Canvas, r: RectF, title: String, color: Int,
+        highlight: Boolean = false, dim: Boolean = false, breathe: Float = 1f, slashed: Boolean = false,
+    ) {
+        canvas.save()
+        val s = pressScale(r) * breathe
+        canvas.scale(s, s, r.centerX(), r.centerY())
+        val radius = r.height() / 2f
+        neon.panel(canvas, r, radius, 160)
+
+        var size = u * 4.4f
+        val room = r.width() - u * 4f
+        val tw = neon.measure(title, size)
+        if (tw > room) size *= room / tw
+        val baseline = r.centerY() + size * 0.36f
+
+        if (highlight) {
+            neon.roundRect(canvas, r, radius, color, u * 0.45f, 255, fillAlpha = 210)
+            neon.text(canvas, title, r.centerX(), baseline, size, DARK)
+        } else {
+            neon.roundRect(canvas, r, radius, color, u * 0.4f, if (dim) 110 else 230)
+            neon.glowText(canvas, title, r.centerX(), baseline, size, Color.WHITE, color, if (dim) 150 else 255)
+        }
+        if (slashed) {
+            val half = neon.measure(title, size) / 2f + u
+            neon.line(canvas, r.centerX() - half, r.centerY() + size * 0.1f, r.centerX() + half, r.centerY() - size * 0.25f,
+                color, u * 0.25f, 170)
+        }
+        canvas.restore()
+    }
+
+    fun stackIcon(canvas: Canvas, cx: Float, cy: Float, s: Float, color: Int) {
+        for (k in 0 until 3) {
+            val y = cy + s * 0.5f - k * s * 0.42f
+            val dx = if (k == 2) s * 0.25f else 0f
+            icon.reset()
+            icon.moveTo(cx - s + dx, y)
+            icon.lineTo(cx + dx, y - s * 0.5f)
+            icon.lineTo(cx + s + dx, y)
+            icon.lineTo(cx + dx, y + s * 0.5f)
+            icon.close()
+            neon.path(canvas, icon, color, u * 0.35f, 230)
+        }
+    }
+
+    fun craneIcon(canvas: Canvas, cx: Float, cy: Float, s: Float, color: Int) {
+        val beam = cy - s * 0.95f
+        neon.line(canvas, cx - s * 1.3f, beam, cx + s * 1.3f, beam, color, u * 0.35f, 230)
+        neon.line(canvas, cx + s * 0.15f, beam, cx + s * 0.35f, cy - s * 0.15f, color, u * 0.25f, 200)
+        box.set(cx - s * 0.2f, cy - s * 0.15f, cx + s * 0.9f, cy + s * 0.45f)
+        neon.roundRect(canvas, box, u * 0.5f, color, u * 0.3f, 230, fillAlpha = 50)
+        box.set(cx - s * 0.75f, cy + s * 0.5f, cx + s * 0.35f, cy + s * 1.1f)
+        neon.roundRect(canvas, box, u * 0.5f, color, u * 0.3f, 160)
+    }
+
+    /** Gem counter in the top-right corner. */
+    fun gems(canvas: Canvas, count: Int) {
+        val y = h * 0.06f
+        neon.gem(canvas, w - u * 7f, y - u * 1.6f, u * 2.6f)
+        neon.glowText(canvas, "$count", w - u * 11.5f, y, u * 5f, Color.WHITE, Neon.GEM,
+            align = Paint.Align.RIGHT)
+    }
+
+    /** Centered message capsule; [fade] runs from 0 (gone) to 1 (fully shown). */
+    fun banner(canvas: Canvas, message: String, fade: Float, accent: Int) {
+        val a = min(1f, fade)
+        val size = u * 4.6f
+        val tw = neon.measure(message, size)
+        val cy = h * 0.53f
+        bannerRect.set(w / 2f - tw / 2f - u * 6f, cy - u * 6f, w / 2f + tw / 2f + u * 6f, cy + u * 6f)
+        neon.panel(canvas, bannerRect, u * 6f, (200 * a).toInt())
+        neon.roundRect(canvas, bannerRect, u * 6f, accent, u * 0.35f, (230 * a).toInt())
+        neon.glowText(canvas, message, w / 2f, cy + size * 0.36f, size, Color.WHITE, accent, (255 * a).toInt())
+    }
+
+    private companion object {
+        const val PRESS_TIME = 0.18f
+        const val DARK = 0xFF14121F.toInt()
+    }
+}

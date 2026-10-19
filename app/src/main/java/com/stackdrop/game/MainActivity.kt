@@ -2,11 +2,14 @@ package com.stackdrop.game
 
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.stackdrop.game.game.GameEvent
 import com.stackdrop.game.game.GameView
+import com.stackdrop.game.platform.ActivityBridge
 
 class MainActivity : AppCompatActivity() {
 
@@ -17,8 +20,12 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        gameView = GameView(this)
+        val bridge = ActivityBridge(this)
+        gameView = GameView(this, bridge)
+        bridge.events = gameView::post
         setContentView(gameView)
+
+        onBackPressedDispatcher.addCallback(this) { gameView.post(GameEvent.Back) }
 
         WindowInsetsControllerCompat(window, gameView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
