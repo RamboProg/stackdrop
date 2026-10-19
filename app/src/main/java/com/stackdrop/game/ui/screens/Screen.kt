@@ -8,6 +8,9 @@ interface Screen {
     val tapsOnUp: Boolean get() = false
 
     fun resize(w: Float, h: Float, u: Float)
+
+    /** Called each time the game switches to this screen. */
+    fun onEnter() {}
     fun update(dt: Float) {}
     fun draw(canvas: Canvas)
     fun onTap(x: Float, y: Float): Boolean

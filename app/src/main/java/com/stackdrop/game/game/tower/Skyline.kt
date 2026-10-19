@@ -3,6 +3,7 @@ package com.stackdrop.game.game.tower
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import com.stackdrop.game.game.ColorMath
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.game.Theme
 import kotlin.random.Random
@@ -42,6 +43,10 @@ class Skyline {
         val c = Canvas(bmp)
         val rnd = Random(seed)
         val u = w / 100f
+        if (theme.calm) {
+            drawCalm(c, theme, height, rnd, u, bright)
+            return bmp
+        }
         val body = Palette.hsv(theme.bgHue, theme.bgSat * 0.8f, 0.05f + 0.06f * bright)
         val edge = Palette.accent(theme)
         val lit = Palette.accent2(theme)
@@ -94,7 +99,39 @@ class Skyline {
         return bmp
     }
 
+    /** Flat silhouettes tinted between the sky and the ground, with a few warm windows on dark skies. */
+    private fun drawCalm(c: Canvas, theme: Theme, height: Int, rnd: Random, u: Float, bright: Float) {
+        val body = ColorMath.mix(theme.skyBottom, theme.ground, 0.3f + 0.4f * bright)
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        var x = -rnd.nextFloat() * u * 3f
+        while (x < w) {
+            val bw = u * (5f + rnd.nextFloat() * 9f)
+            val bh = height * (0.3f + rnd.nextFloat() * 0.62f)
+            val top = height - bh
+            fill.color = body
+            c.drawRect(x, top, x + bw, height.toFloat(), fill)
+
+            if (!theme.light) {
+                fill.color = CALM_WINDOW
+                var wy = top + u * 1.6f
+                while (wy < height - u * 1.5f) {
+                    var wx = x + u * 1.1f
+                    while (wx < x + bw - u * 1.6f) {
+                        if (rnd.nextFloat() < 0.18f) {
+                            fill.alpha = ((40 + rnd.nextInt(40)) * bright).toInt()
+                            c.drawRect(wx, wy, wx + u * 0.75f, wy + u, fill)
+                        }
+                        wx += u * 1.7f
+                    }
+                    wy += u * 2.3f
+                }
+            }
+            x += bw + u * (0.2f + rnd.nextFloat() * 1.4f)
+        }
+    }
+
     private companion object {
         const val BEACON = 0xFFFF4060.toInt()
+        const val CALM_WINDOW = 0xFFFFE3A3.toInt()
     }
 }

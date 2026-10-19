@@ -5,6 +5,7 @@ import com.stackdrop.game.audio.Haptics
 import com.stackdrop.game.audio.SoundManager
 import com.stackdrop.game.ui.Hud
 import com.stackdrop.game.ui.Neon
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -37,7 +38,15 @@ class ModeHost(
     val backdrop: Backdrop,
     val neon: Neon,
     val hud: Hud,
-)
+) {
+    /** The Reduce motion setting; modes skip camera shake while it is on. */
+    var reduceMotion = false
+
+    fun shakeScale(theme: Theme) = if (reduceMotion) 0f else theme.shake
+
+    /** Particle count for this theme, never below one. */
+    fun particles(theme: Theme, count: Int) = max(1, (count * theme.particles).toInt())
+}
 
 /** Semitone offsets of a major scale, so consecutive perfects climb a melody. */
 private val PERFECT_SCALE = floatArrayOf(0f, 2f, 4f, 5f, 7f, 9f, 11f, 12f)

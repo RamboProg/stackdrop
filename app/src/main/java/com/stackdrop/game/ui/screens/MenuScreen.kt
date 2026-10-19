@@ -1,7 +1,6 @@
 package com.stackdrop.game.ui.screens
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.RectF
 import com.stackdrop.game.game.Game
 import com.stackdrop.game.game.GameMode
@@ -13,9 +12,8 @@ import kotlin.math.sin
 class MenuScreen(private val game: Game, private val neon: Neon, private val widgets: Widgets) : Screen {
 
     private val themesButton = RectF()
-    private val soundButton = RectF()
-    private val vibrationButton = RectF()
     private val giftButton = RectF()
+    private val settingsButton = RectF()
     private val modeCards = List(2) { RectF() }
 
     private var w = 0f
@@ -27,15 +25,13 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
         this.h = h
         this.u = u
 
-        val bh = u * 11f
         val row = h * 0.88f
-        val bw = u * 21.5f
-        val buttonGap = u * 2f
-        var bx = u * 4f
-        for (b in listOf(themesButton, soundButton, vibrationButton, giftButton)) {
-            b.set(bx, row, bx + bw, row + bh)
-            bx += bw + buttonGap
-        }
+        val bh = u * 11f
+        themesButton.set(u * 6f, row, u * 48f, row + bh)
+        giftButton.set(u * 52f, row, u * 94f, row + bh)
+
+        val gearY = h * 0.06f - u * 1.6f
+        settingsButton.set(w - u * 11f, gearY - u * 4.5f, w - u * 2f, gearY + u * 4.5f)
 
         val cardTop = h * 0.6f
         val cardH = u * 28f
@@ -54,14 +50,9 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
                 game.press(themesButton)
                 game.openThemes()
             }
-            soundButton.contains(x, y) -> {
-                game.press(soundButton)
-                game.toggleSound()
-            }
-            vibrationButton.contains(x, y) -> {
-                // No ui haptic here: the toggle plays its own confirmation buzz.
-                widgets.press(vibrationButton)
-                game.toggleVibration()
+            settingsButton.contains(x, y) -> {
+                game.press(settingsButton)
+                game.openSettings()
             }
             giftButton.contains(x, y) -> {
                 game.press(giftButton)
@@ -82,26 +73,24 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
         val accent2 = Palette.accent2(game.theme)
         val t = game.time
         val pulse = 0.5f + 0.5f * sin(t * 4f)
+        // Reduce motion keeps the title still.
+        val titleTime = if (game.reduceMotion) 0f else t
 
         val titleY = h * 0.12f
-        neon.chroma(canvas, "STACK", w / 2f, titleY, u * 17f, t, accent)
-        neon.chroma(canvas, "DROP", w / 2f, titleY + u * 15f, u * 17f, t + 0.7f, accent)
-        neon.text(canvas, "ARCADE TOWERS", w / 2f, titleY + u * 22f, u * 3.6f, Color.WHITE, 150)
+        neon.chroma(canvas, "STACK", w / 2f, titleY, u * 17f, titleTime, accent)
+        neon.chroma(canvas, "DROP", w / 2f, titleY + u * 15f, u * 17f, titleTime + 0.7f, accent)
+        neon.text(canvas, "ARCADE TOWERS", w / 2f, titleY + u * 22f, u * 3.6f, neon.textColor, 150)
 
         for ((i, m) in game.modes.withIndex()) drawModeCard(canvas, modeCards[i], m, i, m === game.mode, pulse)
 
         widgets.pill(canvas, themesButton, "THEMES", accent)
-        val soundOn = game.save.soundOn
-        val vibrationOn = game.save.vibrationOn
-        widgets.pill(canvas, soundButton, if (soundOn) "SOUND" else "MUTED", accent, dim = !soundOn, slashed = !soundOn)
-        widgets.pill(canvas, vibrationButton, if (vibrationOn) "VIBRATE" else "NO VIBE", accent,
-            dim = !vibrationOn, slashed = !vibrationOn)
         if (game.save.canClaimDaily()) {
             widgets.pill(canvas, giftButton, "GIFT!", accent2, highlight = true, breathe = 1f + 0.05f * pulse)
         } else {
             widgets.pill(canvas, giftButton, "DAY ${game.save.streak}", accent, dim = true)
         }
-        widgets.gems(canvas, game.save.gems)
+        widgets.gear(canvas, settingsButton, accent)
+        widgets.gems(canvas, game.save.gems, inset = u * 11f)
     }
 
     private fun drawModeCard(canvas: Canvas, r: RectF, mode: GameMode, index: Int, selected: Boolean, pulse: Float) {
@@ -123,8 +112,9 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
         if (index == 0) widgets.stackIcon(canvas, r.centerX(), iconY, u * 6f, accent2)
         else widgets.craneIcon(canvas, r.centerX(), iconY, u * 6f, accent2)
 
-        neon.glowText(canvas, mode.title, r.centerX(), r.top + r.height() * 0.73f, u * 6.5f, Color.WHITE, accent)
-        neon.text(canvas, "BEST ${game.save.best(mode.id)}", r.centerX(), r.top + r.height() * 0.89f, u * 3.6f, Color.WHITE, 170)
+        neon.glowText(canvas, mode.title, r.centerX(), r.top + r.height() * 0.73f, u * 6.5f, neon.textColor, accent)
+        neon.text(canvas, "BEST ${game.save.best(mode.id)}", r.centerX(), r.top + r.height() * 0.89f, u * 3.6f,
+            neon.textColor, 170)
         canvas.restore()
     }
 }

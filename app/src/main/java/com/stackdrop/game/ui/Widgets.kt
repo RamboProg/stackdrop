@@ -1,10 +1,10 @@
 package com.stackdrop.game.ui
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -65,7 +65,7 @@ class Widgets(private val neon: Neon) {
             neon.text(canvas, title, r.centerX(), baseline, size, DARK)
         } else {
             neon.roundRect(canvas, r, radius, color, u * 0.4f, if (dim) 110 else 230)
-            neon.glowText(canvas, title, r.centerX(), baseline, size, Color.WHITE, color, if (dim) 150 else 255)
+            neon.glowText(canvas, title, r.centerX(), baseline, size, neon.textColor, color, if (dim) 150 else 255)
         }
         if (slashed) {
             val half = neon.measure(title, size) / 2f + u
@@ -99,12 +99,49 @@ class Widgets(private val neon: Neon) {
         neon.roundRect(canvas, box, u * 0.5f, color, u * 0.3f, 160)
     }
 
-    /** Gem counter in the top-right corner. */
-    fun gems(canvas: Canvas, count: Int) {
+    /** Gem counter in the top-right corner, moved left by [inset] to make room for other buttons. */
+    fun gems(canvas: Canvas, count: Int, inset: Float = 0f) {
         val y = h * 0.06f
-        neon.gem(canvas, w - u * 7f, y - u * 1.6f, u * 2.6f)
-        neon.glowText(canvas, "$count", w - u * 11.5f, y, u * 5f, Color.WHITE, Neon.GEM,
+        neon.gem(canvas, w - u * 7f - inset, y - u * 1.6f, u * 2.6f)
+        neon.glowText(canvas, "$count", w - u * 11.5f - inset, y, u * 5f, neon.textColor, Neon.GEM,
             align = Paint.Align.RIGHT)
+    }
+
+    /** Settings gear centered in [r]. */
+    fun gear(canvas: Canvas, r: RectF, color: Int) {
+        canvas.save()
+        val s = pressScale(r)
+        canvas.scale(s, s, r.centerX(), r.centerY())
+        val cx = r.centerX()
+        val cy = r.centerY()
+        val outer = r.width() * 0.36f
+        val inner = r.width() * 0.24f
+        box.set(cx - inner, cy - inner, cx + inner, cy + inner)
+        neon.roundRect(canvas, box, inner, color, u * 0.4f, 230)
+        box.set(cx - inner * 0.35f, cy - inner * 0.35f, cx + inner * 0.35f, cy + inner * 0.35f)
+        neon.roundRect(canvas, box, inner, color, u * 0.3f, 200)
+        for (k in 0 until 8) {
+            val a = k * (Math.PI / 4).toFloat()
+            val ca = cos(a)
+            val sa = sin(a)
+            neon.line(canvas, cx + ca * inner, cy + sa * inner, cx + ca * outer, cy + sa * outer, color, u * 0.55f, 230)
+        }
+        canvas.restore()
+    }
+
+    /** Small capsule label; [x] is its left edge, or its right edge when [alignRight]. */
+    fun chip(canvas: Canvas, label: String, x: Float, cy: Float, color: Int, alignRight: Boolean = false) {
+        val size = u * 2.6f
+        val tw = neon.measure(label, size)
+        val left = if (alignRight) x - tw - u * 3.6f else x
+        box.set(left, cy - u * 2.3f, left + tw + u * 3.6f, cy + u * 2.3f)
+        neon.roundRect(canvas, box, box.height() / 2f, color, u * 0.25f, 220, fillAlpha = 200)
+        neon.text(canvas, label, box.centerX(), cy + size * 0.36f, size, DARK)
+    }
+
+    /** Segmented tabs; the selected one is filled. */
+    fun tabs(canvas: Canvas, rects: List<RectF>, labels: Array<String>, selected: Int, color: Int) {
+        for (i in rects.indices) pill(canvas, rects[i], labels[i], color, highlight = i == selected, dim = i != selected)
     }
 
     /** Centered message capsule; [fade] runs from 0 (gone) to 1 (fully shown). */
@@ -116,7 +153,7 @@ class Widgets(private val neon: Neon) {
         bannerRect.set(w / 2f - tw / 2f - u * 6f, cy - u * 6f, w / 2f + tw / 2f + u * 6f, cy + u * 6f)
         neon.panel(canvas, bannerRect, u * 6f, (200 * a).toInt())
         neon.roundRect(canvas, bannerRect, u * 6f, accent, u * 0.35f, (230 * a).toInt())
-        neon.glowText(canvas, message, w / 2f, cy + size * 0.36f, size, Color.WHITE, accent, (255 * a).toInt())
+        neon.glowText(canvas, message, w / 2f, cy + size * 0.36f, size, neon.textColor, accent, (255 * a).toInt())
     }
 
     private companion object {

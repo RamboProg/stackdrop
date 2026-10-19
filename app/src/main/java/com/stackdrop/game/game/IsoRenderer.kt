@@ -1,11 +1,13 @@
 package com.stackdrop.game.game
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 
 class IsoRenderer {
 
@@ -13,6 +15,9 @@ class IsoRenderer {
     var cy = 0f
     var camY = 0f
     var scale = 1f
+
+    /** Matte faces and hairline edges instead of neon glass. */
+    var calm = false
 
     private val path = Path()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -32,8 +37,15 @@ class IsoRenderer {
         return top < screenHeight && bottom > 0f
     }
 
-    /** Dark glassy faces with glowing neon edges in the block's color. */
-    fun drawBlock(canvas: Canvas, b: Block, alpha: Int = 255) {
+    /**
+     * Dark glassy faces with glowing neon edges in the block's color. In calm mode, [above] casts a
+     * soft contact shadow on this block and [moving] gets a slightly brighter top edge.
+     */
+    fun drawBlock(canvas: Canvas, b: Block, alpha: Int = 255, above: Block? = null, moving: Boolean = false) {
+        if (calm) {
+            drawMatte(canvas, b, alpha, above, moving)
+            return
+        }
         val x0 = b.x
         val z0 = b.z
         val y0 = b.y
@@ -67,7 +79,54 @@ class IsoRenderer {
 
     fun strokeRect(canvas: Canvas, x: Float, z: Float, w: Float, d: Float, y: Float, color: Int, alpha: Int, width: Float) {
         rectPath(x, z, w, d, y)
+        if (calm) {
+            stroke.color = color
+            stroke.strokeWidth = width * 0.6f
+            stroke.alpha = (alpha * 0.6f).toInt()
+            canvas.drawPath(path, stroke)
+            return
+        }
         glow(canvas, path, color, Palette.lighten(color, 0.5f), width, alpha)
+    }
+
+    private fun drawMatte(canvas: Canvas, b: Block, alpha: Int, above: Block?, moving: Boolean) {
+        val x0 = b.x
+        val z0 = b.z
+        val y0 = b.y
+        val x1 = b.x + b.w
+        val z1 = b.z + b.d
+        val y1 = b.y + b.h
+
+        face(canvas, b.color, alpha, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1)
+        face(canvas, Palette.shade(b.color, 0.70f), alpha, x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0)
+        face(canvas, Palette.shade(b.color, 0.84f), alpha, x0, y1, z1, x1, y1, z1, x1, y0, z1, x0, y0, z1)
+        if (above != null) contactShadow(canvas, b, above, alpha)
+
+        rectPath(x0, z0, b.w, b.d, y1)
+        stroke.color = Palette.lighten(b.color, if (moving) 0.25f else 0.2f)
+        stroke.strokeWidth = max(1f, scale * 0.03f)
+        stroke.alpha = alpha * (if (moving) 140 else 120) / 255
+        canvas.drawPath(path, stroke)
+    }
+
+    /** Darkens the top of [b]'s visible sides where [above] sits flush with or overhangs them. */
+    private fun contactShadow(canvas: Canvas, b: Block, above: Block, alpha: Int) {
+        val y1 = b.y + b.h
+        val y0 = y1 - min(b.h, SHADOW_DEPTH)
+        val a = alpha * SHADOW_ALPHA / 255
+        val x1 = b.x + b.w
+        val z1 = b.z + b.d
+
+        if (above.x + above.w >= x1 - EDGE) {
+            val za = max(b.z, above.z)
+            val zb = min(z1, above.z + above.d)
+            if (zb > za) face(canvas, Color.BLACK, a, x1, y1, za, x1, y1, zb, x1, y0, zb, x1, y0, za)
+        }
+        if (above.z + above.d >= z1 - EDGE) {
+            val xa = max(b.x, above.x)
+            val xb = min(x1, above.x + above.w)
+            if (xb > xa) face(canvas, Color.BLACK, a, xa, y1, z1, xb, y1, z1, xb, y0, z1, xa, y0, z1)
+        }
     }
 
     private fun rectPath(x: Float, z: Float, w: Float, d: Float, y: Float) {
@@ -111,5 +170,8 @@ class IsoRenderer {
     companion object {
         val COS30 = cos(PI / 6).toFloat()
         const val SIN30 = 0.5f
+        private const val SHADOW_DEPTH = 0.35f
+        private const val SHADOW_ALPHA = 26
+        private const val EDGE = 0.01f
     }
 }

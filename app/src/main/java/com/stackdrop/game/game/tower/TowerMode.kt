@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import com.stackdrop.game.audio.SoundManager
 import com.stackdrop.game.game.Camera
+import com.stackdrop.game.game.ColorMath
 import com.stackdrop.game.game.GameMode
 import com.stackdrop.game.game.ModeHost
 import com.stackdrop.game.game.Palette
@@ -71,6 +72,8 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private val rect = RectF()
 
     private var theme = Palette.themes[0]
+    /** Calm window light, with its alpha baked in. */
+    private var windowLit = WARM_WINDOW
 
     private var w = 0f
     private var h = 0f
@@ -135,6 +138,9 @@ class TowerMode(private val host: ModeHost) : GameMode {
 
     override fun reset(theme: Theme) {
         this.theme = theme
+        particles.calm = theme.calm
+        windowLit = if (theme.light) ColorMath.withAlpha(ColorMath.mix(theme.skyTop, GLASS_TINT, 0.35f), 90)
+        else ColorMath.withAlpha(WARM_WINDOW, 130)
         floors.clear()
         tumbles.clear()
         particles.clear()
@@ -256,14 +262,20 @@ class TowerMode(private val host: ModeHost) : GameMode {
             host.haptics.perfect(combo)
             val label = if (combo == 1) "PERFECT" else "PERFECT x$combo"
             host.hud.showCombo(if (abs(assist) > 0.05f) "$label  +BALANCE" else label)
-            particles.flares(px, py, glow, 18 + min(combo, 6) * 2, w * 0.5f)
+            if (theme.calm) {
+                particles.ring(px, py, glow, w * 0.12f)
+                particles.screenMotes(px, py, glow, host.particles(theme, 6), w * 0.08f)
+            } else {
+                particles.flares(px, py, glow, 18 + min(combo, 6) * 2, w * 0.5f)
+            }
         } else {
             combo = 0
             swayV += offset / W * SWAY_KICK + fvx * 0.01f
             host.sound.play(SoundManager.DROP, 0.8f, 0.8f)
             host.haptics.land()
-            particles.flares(px, py, glow, 12, w * 0.4f)
-            camera.shake(w * 0.003f, 0.1f)
+            if (theme.calm) particles.screenMotes(px, py, glow, host.particles(theme, 5), w * 0.1f)
+            else particles.flares(px, py, glow, 12, w * 0.4f)
+            camera.shake(w * 0.003f * host.shakeScale(theme), 0.1f)
         }
         host.hud.onScore()
 
@@ -296,7 +308,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         host.sound.play(SoundManager.FAIL, 1.1f, 0.45f)
         host.haptics.soft()
         host.hud.showCombo(if (lives > 0) "Slipped off" else "Last one slipped")
-        camera.shake(w * 0.005f, 0.15f)
+        camera.shake(w * 0.005f * host.shakeScale(theme), 0.15f)
         if (lives <= 0) {
             endRun("All modules used")
         } else {
@@ -310,7 +322,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         collapseV = collapseDir * 0.2f
         host.sound.play(SoundManager.FAIL, 0.8f, 0.55f)
         host.haptics.soft()
-        camera.shake(w * 0.01f, 0.3f)
+        camera.shake(w * 0.01f * host.shakeScale(theme), 0.3f)
         endRun("The tower tipped over")
     }
 
@@ -431,15 +443,15 @@ class TowerMode(private val host: ModeHost) : GameMode {
         }
 
         if (hook == Hook.FALLING && !isOver) {
-            drawFloor(canvas, sx(fx), sy(fy), nextColor, nextWindows, floors.isEmpty(), 255)
+            drawFloor(canvas, sx(fx), sy(fy), nextColor, nextWindows, floors.isEmpty(), 255, moving = true)
         }
 
         drawCrane(canvas)
         particles.drawScreen(canvas)
 
         if (damageFlash > 0f) {
-            fill.color = Neon.RED
-            fill.alpha = (28 * damageFlash).toInt()
+            fill.color = if (theme.calm) theme.danger else Neon.RED
+            fill.alpha = ((if (theme.calm) CALM_FLASH else NEON_FLASH) * damageFlash).toInt()
             canvas.drawRect(0f, 0f, w, h, fill)
         }
     }
@@ -450,15 +462,15 @@ class TowerMode(private val host: ModeHost) : GameMode {
         val accent = Palette.accent(theme)
         val neon = host.neon
 
-        fill.color = Palette.hsv(theme.bgHue, theme.bgSat, 0.03f)
+        fill.color = if (theme.calm) theme.ground else Palette.hsv(theme.bgHue, theme.bgSat, 0.03f)
         fill.alpha = 255
         canvas.drawRect(0f, street, w, h, fill)
-        neon.line(canvas, 0f, street, w, street, accent, u * 0.4f, 220)
+        neon.line(canvas, 0f, street, w, street, accent, u * 0.4f, if (theme.calm) 160 else 220)
 
         val dashY = street + (h - street).coerceAtMost(u * 14f) * 0.5f
         var x = (-camera.x * sc) % (u * 12f) - u * 12f
         while (x < w) {
-            neon.line(canvas, x, dashY, x + u * 5f, dashY, accent, u * 0.25f, 90)
+            neon.line(canvas, x, dashY, x + u * 5f, dashY, accent, u * 0.25f, if (theme.calm) 70 else 90)
             x += u * 12f
         }
 
@@ -466,10 +478,17 @@ class TowerMode(private val host: ModeHost) : GameMode {
         neon.roundRect(canvas, rect, u, Palette.accent2(theme), u * 0.3f, 200, fillAlpha = 40)
     }
 
-    private fun drawFloor(canvas: Canvas, cx: Float, bottom: Float, color: Int, windows: Int, lobby: Boolean, alpha: Int) {
+    private fun drawFloor(
+        canvas: Canvas, cx: Float, bottom: Float, color: Int, windows: Int, lobby: Boolean, alpha: Int,
+        moving: Boolean = false,
+    ) {
         val fw = W * sc
         val fh = H * sc
         rect.set(cx - fw / 2f, bottom - fh, cx + fw / 2f, bottom)
+        if (theme.calm) {
+            drawCalmFloor(canvas, bottom, color, windows, lobby, alpha, moving)
+            return
+        }
 
         fill.color = Palette.shade(color, 0.18f)
         fill.alpha = alpha
@@ -515,33 +534,79 @@ class TowerMode(private val host: ModeHost) : GameMode {
         host.neon.line(canvas, rect.left, roof, rect.right, roof, color, max(1f, sc * 0.04f), (alpha * 0.6f).toInt())
     }
 
+    /** Matte floor in the block color with soft window light and a hairline top edge. */
+    private fun drawCalmFloor(canvas: Canvas, bottom: Float, color: Int, windows: Int, lobby: Boolean, alpha: Int, moving: Boolean) {
+        val fw = rect.width()
+        val fh = rect.height()
+        fill.color = color
+        fill.alpha = alpha
+        canvas.drawRect(rect, fill)
+
+        val padX = fw * 0.1f
+        val gapX = fw * 0.08f
+        val padTop = fh * 0.2f
+        val padBottom = fh * 0.12f
+        val gapY = fh * 0.12f
+        val ww = (fw - padX * 2f - gapX * 2f) / 3f
+        val wh = (fh - padTop - padBottom - gapY) / 2f
+        for (r in 0..1) {
+            for (c in 0..2) {
+                val left = rect.left + padX + c * (ww + gapX)
+                val top = rect.top + padTop + r * (wh + gapY)
+                if (lobby && r == 1 && c == 1) {
+                    fill.color = Palette.shade(color, 0.72f)
+                    fill.alpha = (alpha * 0.9f).toInt()
+                    canvas.drawRect(left, top - wh * 0.3f, left + ww, bottom, fill)
+                    continue
+                }
+                if ((windows and (1 shl (r * 3 + c))) != 0) {
+                    fill.color = windowLit
+                    fill.alpha = Color.alpha(windowLit) * alpha / 255
+                } else {
+                    fill.color = Palette.shade(color, 0.86f)
+                    fill.alpha = (alpha * 0.6f).toInt()
+                }
+                canvas.drawRect(left, top, left + ww, top + wh, fill)
+            }
+        }
+
+        fill.color = Palette.lighten(color, if (moving) 0.25f else 0.2f)
+        fill.alpha = alpha * (if (moving) 140 else 120) / 255
+        canvas.drawRect(rect.left, rect.top, rect.right, rect.top + max(1f, sc * 0.03f), fill)
+    }
+
     private fun drawCrane(canvas: Canvas) {
         val neon = host.neon
-        val accent = Palette.accent(theme)
-        val accent2 = Palette.accent2(theme)
+        val calm = theme.calm
+        // Calm themes draw the crane as thin, quiet lines in the dim text color.
+        val accent = if (calm) theme.textDim else Palette.accent(theme)
+        val accent2 = if (calm) theme.textDim else Palette.accent2(theme)
+        val rope = if (calm) theme.textDim else Palette.lighten(accent2, 0.5f)
+        val a = if (calm) 0.8f else 1f
+        val thin = if (calm) 0.7f else 1f
         val top = pivotScreenY - u * 5f
         val bottom = pivotScreenY - u * 1.2f
 
-        neon.line(canvas, 0f, top, w, top, accent, u * 0.4f, 210)
-        neon.line(canvas, 0f, bottom, w, bottom, accent, u * 0.4f, 210)
+        neon.line(canvas, 0f, top, w, top, accent, u * 0.4f * thin, (210 * a).toInt())
+        neon.line(canvas, 0f, bottom, w, bottom, accent, u * 0.4f * thin, (210 * a).toInt())
         val step = u * 7f
         val offset = ((camera.x * sc) % step + step) % step
         var x = -offset
         while (x < w + step) {
-            neon.line(canvas, x, bottom, x + step / 2f, top, accent, u * 0.22f, 130)
-            neon.line(canvas, x + step / 2f, top, x + step, bottom, accent, u * 0.22f, 130)
+            neon.line(canvas, x, bottom, x + step / 2f, top, accent, u * 0.22f * thin, (130 * a).toInt())
+            neon.line(canvas, x + step / 2f, top, x + step, bottom, accent, u * 0.22f * thin, (130 * a).toInt())
             x += step
         }
 
         val px = w / 2f + camera.shakeX
         rect.set(px - u * 5f, bottom - u * 0.5f, px + u * 5f, bottom + u * 2.5f)
-        neon.roundRect(canvas, rect, u, accent2, u * 0.35f, 255, fillAlpha = 90)
+        neon.roundRect(canvas, rect, u, accent2, u * 0.35f * thin, (255 * a).toInt(), fillAlpha = (90 * a).toInt())
         val ropeTop = rect.bottom
 
         if (isOver || hook == Hook.FALLING || hook == Hook.EMPTY) {
             val hookY = ropeTop + u * 4f
-            neon.line(canvas, px, ropeTop, px, hookY, Palette.lighten(accent2, 0.5f), u * 0.22f, 200)
-            neon.dot(canvas, px, hookY, u * 0.8f, accent2)
+            neon.line(canvas, px, ropeTop, px, hookY, rope, u * 0.22f * thin, (200 * a).toInt())
+            neon.dot(canvas, px, hookY, u * 0.8f, accent2, (255 * a).toInt())
             return
         }
 
@@ -551,42 +616,46 @@ class TowerMode(private val host: ModeHost) : GameMode {
         val hy = pivotY() - len * cos(theta)
         val hsx = sx(hx)
         val hsy = sy(hy)
-        neon.line(canvas, px, ropeTop, hsx, hsy, Palette.lighten(accent2, 0.5f), u * 0.22f, 220)
+        neon.line(canvas, px, ropeTop, hsx, hsy, rope, u * 0.22f * thin, (220 * a).toInt())
 
         val moduleTop = sy(hy - HOOK_GAP)
         val half = W * sc / 2f
-        neon.line(canvas, hsx, hsy, hsx - half * 0.8f, moduleTop, accent2, u * 0.15f, 160)
-        neon.line(canvas, hsx, hsy, hsx + half * 0.8f, moduleTop, accent2, u * 0.15f, 160)
-        neon.dot(canvas, hsx, hsy, u * 0.8f, accent2)
-        drawFloor(canvas, hsx, sy(hy - HOOK_GAP - H), nextColor, nextWindows, floors.isEmpty(), 255)
+        neon.line(canvas, hsx, hsy, hsx - half * 0.8f, moduleTop, accent2, u * 0.15f * thin, (160 * a).toInt())
+        neon.line(canvas, hsx, hsy, hsx + half * 0.8f, moduleTop, accent2, u * 0.15f * thin, (160 * a).toInt())
+        neon.dot(canvas, hsx, hsy, u * 0.8f, accent2, (255 * a).toInt())
+        drawFloor(canvas, hsx, sy(hy - HOOK_GAP - H), nextColor, nextWindows, floors.isEmpty(), 255, moving = true)
     }
 
     override fun drawHud(canvas: Canvas, neon: Neon, u: Float, width: Float, height: Float) {
+        val calm = theme.calm
+        val heartColor = if (calm) theme.danger else Neon.RED
+        val lostColor = if (calm) theme.textDim else Color.GRAY
         for (i in 0 until LIVES) {
             val alive = i < lives
             neon.heart(canvas, u * 7f + i * u * 8f, height * 0.06f - u * 1.2f, u * 2.6f,
-                if (alive) Neon.RED else Color.GRAY, alive)
+                if (alive) heartColor else lostColor, alive)
         }
 
         val y = height * 0.155f
         val cx = width / 2f
         val half = u * 24f
         val accent = Palette.accent(theme)
+        val warn = if (calm) theme.danger else Neon.AMBER
         neon.line(canvas, cx - half, y, cx + half, y, accent, u * 0.3f, 110)
-        neon.line(canvas, cx - half, y, cx - half * 0.72f, y, Neon.AMBER, u * 0.4f, 170)
-        neon.line(canvas, cx + half * 0.72f, y, cx + half, y, Neon.AMBER, u * 0.4f, 170)
-        neon.line(canvas, cx, y - u * 1.4f, cx, y + u * 1.4f, Color.WHITE, u * 0.25f, 160)
+        neon.line(canvas, cx - half, y, cx - half * 0.72f, y, warn, u * 0.4f, 170)
+        neon.line(canvas, cx + half * 0.72f, y, cx + half, y, warn, u * 0.4f, 170)
+        neon.line(canvas, cx, y - u * 1.4f, cx, y + u * 1.4f, neon.textColor, u * 0.25f, 160)
 
         val b = (shownBalance + sway * 0.25f).coerceIn(-1.15f, 1.15f)
         val danger = min(1f, abs(b))
-        val color = Palette.hsv(140f - 100f * danger, 0.75f, 1f)
+        val color = if (calm) ColorMath.mix(accent, theme.danger, danger) else Palette.hsv(140f - 100f * danger, 0.75f, 1f)
         val pulse = if (danger > DANGER) 0.75f + 0.25f * sin(clock * 6f) else 1f
         neon.dot(canvas, cx + b * half, y, u * 1.5f, color, (255 * pulse).toInt())
         if (danger > DANGER) {
             val side = if (b > 0f) "LEANING RIGHT" else "LEANING LEFT"
-            neon.glowText(canvas, side, cx, y + u * 5f, u * 3.2f, Color.WHITE, Neon.AMBER, (255 * pulse).toInt())
+            neon.glowText(canvas, side, cx, y + u * 5f, u * 3.2f, neon.textColor, warn, (255 * pulse).toInt())
         } else {
-            neon.text(canvas, "BALANCE", cx, y + u * 5f, u * 3.2f, Color.WHITE, 160)
+            neon.text(canvas, "BALANCE", cx, y + u * 5f, u * 3.2f, neon.textColor, 160)
         }
     }
 
@@ -619,5 +688,9 @@ class TowerMode(private val host: ModeHost) : GameMode {
         const val OVER_TIME = 1.3f
         const val COLLAPSE_TIME = 2.2f
         const val MIN_ZOOM = 0.15f
+        const val NEON_FLASH = 28
+        const val CALM_FLASH = 18
+        const val WARM_WINDOW = 0xFFFFE3A3.toInt()
+        const val GLASS_TINT = 0xFFF4F8FA.toInt()
     }
 }

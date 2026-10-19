@@ -1,7 +1,6 @@
 package com.stackdrop.game.ui.screens
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.RectF
 import com.stackdrop.game.game.Game
 import com.stackdrop.game.game.Palette
@@ -58,23 +57,26 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
             best - mode.score in 1..3 -> "SO CLOSE"
             else -> "NICE RUN"
         }
-        neon.chroma(canvas, headline, w / 2f, top, u * 9.5f, game.time, accent)
-        neon.text(canvas, mode.endReason, w / 2f, top + u * 6.5f, u * 3.8f, Color.WHITE, 170)
-        neon.glowText(canvas, "${mode.score}", w / 2f, top + u * 25f, u * 18f, Color.WHITE, accent)
+        val text = neon.textColor
+        val still = game.reduceMotion
+        neon.chroma(canvas, headline, w / 2f, top, u * 9.5f, if (still) 0f else game.time, accent)
+        neon.text(canvas, mode.endReason, w / 2f, top + u * 6.5f, u * 3.8f, text, 170)
+        neon.glowText(canvas, "${mode.score}", w / 2f, top + u * 25f, u * 18f, text, accent)
 
         if (game.newBest) {
-            neon.glowText(canvas, "NEW BEST!", w / 2f, top + u * 34f, u * 7f * (1f + 0.06f * pulse), Color.WHITE, Neon.GOLD)
+            val breathe = if (still) 1f else 1f + 0.06f * pulse
+            neon.glowText(canvas, "NEW BEST!", w / 2f, top + u * 34f, u * 7f * breathe, text, Neon.GOLD)
         } else {
-            neon.text(canvas, "BEST $best", w / 2f, top + u * 33f, u * 5f, Color.WHITE, 200)
+            neon.text(canvas, "BEST $best", w / 2f, top + u * 33f, u * 5f, text, 200)
         }
 
         val gems = "+${game.gemsEarned}"
         val tw = neon.measure(gems, u * 6f)
-        neon.glowText(canvas, gems, w / 2f - u * 2.5f, top + u * 43f, u * 6f, Color.WHITE, Neon.GEM)
+        neon.glowText(canvas, gems, w / 2f - u * 2.5f, top + u * 43f, u * 6f, text, Neon.GEM)
         neon.gem(canvas, w / 2f - u * 2.5f + tw / 2f + u * 4f, top + u * 41f, u * 2.6f)
 
         if (mode.bestCombo > 1) {
-            neon.text(canvas, "BEST COMBO x${mode.bestCombo}", w / 2f, top + u * 50f, u * 4f, Color.WHITE, 180)
+            neon.text(canvas, "BEST COMBO x${mode.bestCombo}", w / 2f, top + u * 50f, u * 4f, text, 180)
         }
 
         if (t > Game.RESTART_DELAY) {

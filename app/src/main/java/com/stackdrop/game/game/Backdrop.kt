@@ -11,13 +11,24 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import com.stackdrop.game.game.scenery.AmbientLayer
+import com.stackdrop.game.game.scenery.CalmScenery
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** Synthwave scenery shared by both modes: sky, stars, striped sun, scrolling grid floor, CRT overlay. */
+/**
+ * Scenery shared by both modes. Neon themes get the synthwave sky, stars, striped sun, scrolling grid
+ * and CRT overlay; calm themes get a soft landscape with slow ambient motion.
+ */
 class Backdrop {
+
+    /** Freezes ambient motion and halves it, for the Reduce motion setting. */
+    var reduceMotion = false
+
+    private val calm = CalmScenery()
+    private val ambient = AmbientLayer()
 
     private var w = 0f
     private var h = 0f
@@ -70,11 +81,22 @@ class Backdrop {
 
         skyTheme = null
         sunTheme = null
+        calm.resize(width, height)
+        ambient.resize(width, height)
     }
 
     /** [horizon] is the screen y of the grid horizon; it slides down as the camera climbs. */
     fun draw(canvas: Canvas, theme: Theme, drift: Float, horizon: Float, time: Float) {
         if (w == 0f) return
+        val t = if (reduceMotion) 0f else time
+        if (theme.scenery != Scenery.SYNTH_GRID) {
+            val rise = calm.riseFor(horizon)
+            calm.drawSky(canvas, theme, rise, t)
+            ambient.drawBack(canvas, theme, rise, t, reduceMotion)
+            calm.drawLayers(canvas, theme, rise)
+            ambient.drawFront(canvas, theme, rise, t, reduceMotion)
+            return
+        }
         if (skyTheme !== theme || skyDrift.isNaN() || abs(skyDrift - drift) > 0.5f) {
             skyPaint.shader = LinearGradient(
                 0f, 0f, 0f, h,
@@ -86,14 +108,15 @@ class Backdrop {
             skyDrift = drift
         }
         canvas.drawRect(0f, 0f, w, h, skyPaint)
-        drawStars(canvas, horizon, time)
+        drawStars(canvas, horizon, t)
         drawSun(canvas, theme, horizon)
-        if (horizon < h) drawGrid(canvas, theme, horizon, time)
+        if (horizon < h) drawGrid(canvas, theme, horizon, t)
     }
 
-    fun drawOverlay(canvas: Canvas) {
+    fun drawOverlay(canvas: Canvas, theme: Theme) {
         if (w == 0f) return
-        canvas.drawRect(0f, 0f, w, h, scanPaint)
+        if (theme.scanlines) canvas.drawRect(0f, 0f, w, h, scanPaint)
+        vignettePaint.alpha = (255 * theme.vignette).toInt().coerceIn(0, 255)
         canvas.drawRect(0f, 0f, w, h, vignettePaint)
     }
 

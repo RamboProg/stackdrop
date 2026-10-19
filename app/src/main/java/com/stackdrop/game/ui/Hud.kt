@@ -8,6 +8,7 @@ import com.stackdrop.game.ui.screens.GameOverScreen
 import com.stackdrop.game.ui.screens.MenuScreen
 import com.stackdrop.game.ui.screens.PlayingScreen
 import com.stackdrop.game.ui.screens.Screen
+import com.stackdrop.game.ui.screens.SettingsScreen
 import com.stackdrop.game.ui.screens.ThemesScreen
 import kotlin.math.max
 
@@ -20,7 +21,8 @@ class Hud(private val game: Game, private val neon: Neon) {
     private val themes = ThemesScreen(game, neon, widgets)
     private val playing = PlayingScreen(game, this, neon, widgets)
     private val gameOver = GameOverScreen(game, neon, widgets)
-    private val screens = listOf(menu, themes, playing, gameOver)
+    private val settings = SettingsScreen(game, neon, widgets)
+    private val screens = listOf(menu, themes, playing, gameOver, settings)
 
     var scorePop = 0f
         private set
@@ -61,6 +63,11 @@ class Hud(private val game: Game, private val neon: Neon) {
         bannerTime = BANNER_TIME
     }
 
+    /** The game just switched state. */
+    fun onEnter() {
+        screen()?.onEnter()
+    }
+
     fun onTap(x: Float, y: Float) {
         screen()?.onTap(x, y)
     }
@@ -91,6 +98,7 @@ class Hud(private val game: Game, private val neon: Neon) {
         Game.State.THEMES -> themes
         Game.State.PLAYING -> playing
         Game.State.GAME_OVER -> gameOver
+        Game.State.SETTINGS -> settings
         else -> null
     }
 

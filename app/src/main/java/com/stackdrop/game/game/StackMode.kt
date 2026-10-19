@@ -53,6 +53,8 @@ class StackMode(private val host: ModeHost) : GameMode {
 
     override fun reset(theme: Theme) {
         this.theme = theme
+        iso.calm = theme.calm
+        particles.calm = theme.calm
         tower.clear()
         debris.clear()
         particles.clear()
@@ -136,8 +138,13 @@ class StackMode(private val host: ModeHost) : GameMode {
             if (grew) host.sound.play(SoundManager.UNLOCK, 1.2f, 0.6f)
             host.haptics.perfect(combo)
             val glow = Palette.lighten(b.color, 0.4f)
-            particles.ripple(b, 1 + min(combo, 3), glow)
-            particles.burst(b, 14 + min(combo, 10) * 2, glow)
+            if (theme.calm) {
+                particles.ripple(b, 1, glow)
+                particles.motes(b, host.particles(theme, 6), glow)
+            } else {
+                particles.ripple(b, 1 + min(combo, 3), glow)
+                particles.burst(b, host.particles(theme, 14 + min(combo, 10) * 2), glow)
+            }
 
             val label = if (combo == 1) "PERFECT" else "PERFECT x$combo"
             host.hud.showCombo(if (grew) "$label  GROW!" else label)
@@ -172,7 +179,7 @@ class StackMode(private val host: ModeHost) : GameMode {
         host.sound.play(SoundManager.DROP, 1f, 0.8f)
         host.sound.play(SoundManager.SLICE, 0.9f + cut / size * 0.4f, 0.6f)
         host.haptics.land()
-        camera.shake(width * 0.003f, 0.1f)
+        camera.shake(width * 0.003f * host.shakeScale(theme), 0.1f)
         place(b)
     }
 
@@ -211,7 +218,7 @@ class StackMode(private val host: ModeHost) : GameMode {
 
         host.sound.play(SoundManager.FAIL, 1f, 0.5f)
         host.haptics.soft()
-        camera.shake(width * 0.008f, 0.2f)
+        camera.shake(width * 0.008f * host.shakeScale(theme), 0.2f)
 
         val towerTop = tower.last().let { it.y + it.h }
         val towerPx = (towerTop + BASE * 1.2f) * baseScale
@@ -235,8 +242,11 @@ class StackMode(private val host: ModeHost) : GameMode {
         val depthRef = top.x + top.w / 2f + top.z + top.d / 2f
 
         for (d in debris) if (d.depth < depthRef) d.draw(canvas, iso)
-        for (b in tower) if (iso.isVisible(b, height)) iso.drawBlock(canvas, b)
-        moving?.let { iso.drawBlock(canvas, it) }
+        for (i in tower.indices) {
+            val b = tower[i]
+            if (iso.isVisible(b, height)) iso.drawBlock(canvas, b, above = tower.getOrNull(i + 1))
+        }
+        moving?.let { iso.drawBlock(canvas, it, moving = true) }
         particles.drawWorld(canvas, iso)
         for (d in debris) if (d.depth >= depthRef) d.draw(canvas, iso)
         particles.drawScreen(canvas)
