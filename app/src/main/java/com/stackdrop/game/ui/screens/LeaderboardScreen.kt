@@ -224,22 +224,27 @@ class LeaderboardScreen(
     private fun drawRow(canvas: Canvas, e: BoardEntry, mine: Boolean, accent: Int) {
         val radius = u * 2.5f
         neon.panel(canvas, row, radius, 140)
-        val tint = when (e.rank) {
+        val medal = when (e.rank) {
             1 -> GOLD
             2 -> SILVER
             3 -> BRONZE
             else -> 0
         }
-        if (tint != 0) {
-            fill.color = tint
-            fill.alpha = TINT_ALPHA
-            canvas.drawRoundRect(row, radius, radius, fill)
-        }
+        // The top three get a soft medal behind their rank and a matching hairline; no glow.
         if (mine) neon.roundRect(canvas, row, radius, accent, u * 0.3f, 220)
+        else if (medal != 0) neon.roundRect(canvas, row, radius, medal, u * 0.25f, MEDAL_EDGE)
 
         val text = neon.textColor
         val baseline = row.centerY() + u * 1.4f
-        neon.text(canvas, "${e.rank}", row.left + u * 6f, baseline, u * 3.8f, text, 230)
+        val rankX = row.left + u * 6f
+        if (medal != 0) {
+            fill.color = medal
+            fill.alpha = MEDAL_FILL
+            canvas.drawCircle(rankX, row.centerY(), row.height() * 0.3f, fill)
+            neon.text(canvas, "${e.rank}", rankX, baseline, u * 3.8f, MEDAL_TEXT, 255)
+        } else {
+            neon.text(canvas, "${e.rank}", rankX, baseline, u * 3.8f, text, 230)
+        }
         avatars.draw(canvas, e.avatar, row.left + u * 14f, row.centerY(), row.height() * 0.33f)
         neon.text(canvas, e.name, row.left + u * 20f, baseline, u * 3.8f, text, 235, Paint.Align.LEFT)
         neon.text(canvas, "${e.score}", row.right - u * 4f, baseline, u * 4.2f, text, 255, Paint.Align.RIGHT)
@@ -305,7 +310,9 @@ class LeaderboardScreen(
 
     private companion object {
         const val VEIL = 170
-        const val TINT_ALPHA = 45
+        const val MEDAL_FILL = 220
+        const val MEDAL_EDGE = 120
+        const val MEDAL_TEXT = 0xFF2A2420.toInt()
         const val GOLD = 0xFFE8C872.toInt()
         const val SILVER = 0xFFC8CDD6.toInt()
         const val BRONZE = 0xFFD4A07A.toInt()
