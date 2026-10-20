@@ -19,6 +19,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
         REDUCE_MOTION("Reduce motion"),
         PRIVACY_OPTIONS("Privacy options"),
         PRIVACY_POLICY("Privacy policy"),
+        DATA_DELETION("Delete my data"),
         VERSION("Version"),
     }
 
@@ -68,6 +69,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
             Row.REDUCE_MOTION -> game.toggleReduceMotion()
             Row.PRIVACY_OPTIONS -> game.showPrivacyOptions()
             Row.PRIVACY_POLICY -> game.bridge.openUrl(Links.PRIVACY_POLICY)
+            Row.DATA_DELETION -> game.bridge.openUrl(Links.ACCOUNT_DELETION)
             Row.VERSION -> Unit
         }
         return true
@@ -100,7 +102,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
                 Row.SOUND -> onOff(game.save.soundOn)
                 Row.VIBRATION -> onOff(game.save.vibrationOn)
                 Row.REDUCE_MOTION -> onOff(game.reduceMotion)
-                Row.PRIVACY_OPTIONS, Row.PRIVACY_POLICY -> "OPEN"
+                Row.PRIVACY_OPTIONS, Row.PRIVACY_POLICY, Row.DATA_DELETION -> "OPEN"
                 Row.VERSION -> BuildConfig.VERSION_NAME
             }
             val on = value == ON || value == "OPEN"

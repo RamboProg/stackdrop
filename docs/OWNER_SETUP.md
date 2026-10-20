@@ -208,3 +208,63 @@ images, answer **Y** and keep the default (1 day) so old builds do not cost stor
 8. **Delete account:** tap DELETE ACCOUNT and confirm twice. You return to the menu as a fresh guest
    (settings kept). In Firestore, `profiles/{old uid}`, `usernames/...`, `friendCodes/...`,
    `users/{old uid}` and `private/{old uid}` are gone, and the user is removed from Authentication.
+
+## 9. Backend tests and deploys (Phases 4–5 onward)
+
+From `backend/functions`:
+
+| Command | What it checks |
+|---|---|
+| `npm test` | Name filter, friend codes, score validation, ISO weeks |
+| `npm run test:rules` | Firestore security rules (Firestore emulator) |
+| `npm run test:integration` | Every callable function against the Firestore and Auth emulators, acting as several players: names, friends, scores, account deletion |
+
+Deploy from `backend` with `firebase deploy --only functions,firestore`. A newly created function
+can answer `UNAUTHENTICATED` for about a minute while its public access is applied; that clears
+by itself.
+
+## 10. Phase 4–5 test steps: leaderboards and friends
+
+1. Choose a name, play a few runs, open **RANKS**. Your row shows on **WEEK** and **ALL TIME**;
+   the line under the tabs counts down to Monday 00:00 UTC.
+2. Turn on airplane mode, play a run, open RANKS: it shows "You're offline, showing saved ranks".
+   Turn it off and play again: the queued run is sent.
+3. A run that sets your best for the week shows "#N this week" on game over.
+4. Second device (another Google account): open **FRIENDS → ADD** and type the first player's code.
+   The first player sees a dot on FRIENDS; accept with ✓. Both now appear on the **FRIENDS** tab of
+   RANKS. Tapping a row on RANKS opens that player's card with **ADD FRIEND**.
+5. Beat a friend's best: game over shows "You passed <name> (<score>)".
+6. FRIENDS → tap a friend → **Remove**: they disappear for both players.
+
+## 11. Ads (Phase 6)
+
+**AdMob setup (once):**
+1. In [AdMob](https://admob.google.com): **Apps → Add app** (Android, link it to the Play listing
+   once it exists). Create two ad units: **Rewarded** and **Interstitial**.
+2. **Privacy & messaging → GDPR → Create message** for the app and publish it. Without it the
+   consent form cannot appear for EEA/UK players and they will not get ads.
+3. Put the real IDs in `gradle.properties` (release builds only; debug builds always use Google's
+   test IDs):
+   ```
+   stackdrop.admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+   stackdrop.admobRewardedId=ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ
+   stackdrop.admobInterstitialId=ca-app-pub-XXXXXXXXXXXXXXXX/WWWWWWWWWW
+   ```
+4. Publish `app-ads.txt` on your developer website (AdMob shows the exact line).
+
+**Test steps (debug build):**
+1. Uninstall, reinstall, launch: the consent form appears before anything else (debug builds always
+   pretend to be in the EEA). No ad ever shows on launch.
+2. **THEMES → ▶ +25**: a test ad plays; gems go up by 25 only after you close it. Five per day.
+3. Finish a run with at least 3 gems: **▶ 2× GEMS** doubles the gems from that run, once.
+4. Lose a run with a score of 10 or more: "Keep going?" with a 5-second ring. Watch the ad and the
+   run continues (Tower: two floors fewer after a collapse, or one life back). **No thanks** goes
+   to game over. Offered once per run.
+5. Interstitials only appear when starting a new run after at least 8 runs in total, 3 minutes into
+   the session, 4 runs and 4 minutes since the last full-screen ad, and not after a new best.
+
+**Release builds:** R8 removes unused code, and one library rule needed fixing
+(`app/src/main/keepRules/stackdrop.keep`). After changing dependencies, build a release
+(**Build → Generate Signed App Bundle or APK**), install it and check that it launches, signs in,
+and shows the ▶ +25 pill. Play Console answers and the pre-launch checklist are in
+`docs/PLAY_CONSOLE.md`; privacy policy and deletion page drafts are in `docs/store/`.
