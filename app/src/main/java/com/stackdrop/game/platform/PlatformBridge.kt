@@ -21,6 +21,9 @@ interface PlatformBridge {
     fun maybeShowInterstitial()
     fun showPrivacyOptions()
 
+    /** Opens Google Play's purchase sheet for premium; the result arrives as PremiumChanged. */
+    fun buyPremium()
+
     /** Safe to call every frame from the game thread. */
     fun rewardedReady(): Boolean
     fun interstitialReady(): Boolean

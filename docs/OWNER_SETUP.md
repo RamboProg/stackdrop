@@ -240,21 +240,30 @@ by itself.
 
 **AdMob setup (once):**
 1. In [AdMob](https://admob.google.com): **Apps → Add app** (Android, link it to the Play listing
-   once it exists). Create two ad units: **Rewarded** and **Interstitial**.
+   once it exists). Create three ad units: **Banner** (adaptive), **Rewarded** and **Interstitial**.
+   Fill in **Payments** (tax info and bank account) so AdMob can pay you.
 2. **Privacy & messaging → GDPR → Create message** for the app and publish it. Without it the
    consent form cannot appear for EEA/UK players and they will not get ads.
 3. Put the real IDs in `gradle.properties` (release builds only; debug builds always use Google's
-   test IDs):
+   test IDs, so you never click your own real ads, which AdMob treats as invalid traffic):
    ```
    stackdrop.admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+   stackdrop.admobBannerId=ca-app-pub-XXXXXXXXXXXXXXXX/BBBBBBBBBB
    stackdrop.admobRewardedId=ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ
    stackdrop.admobInterstitialId=ca-app-pub-XXXXXXXXXXXXXXXX/WWWWWWWWWW
    ```
 4. Publish `app-ads.txt` on your developer website (AdMob shows the exact line).
 
+**The consent form:** it only appears to players in the EEA, UK and Switzerland, where the law
+requires it and where Google will not serve AdMob ads without it. Everyone else never sees it. To
+test it from elsewhere, add `stackdrop.consentDebugEea=true` to `gradle.properties` and reinstall.
+
+**The banner:** an adaptive banner sits in its own strip below the game, so it never covers buttons.
+Premium players have no banner and no interstitials.
+
 **Test steps (debug build):**
-1. Uninstall, reinstall, launch: the consent form appears before anything else (debug builds always
-   pretend to be in the EEA). No ad ever shows on launch.
+1. Launch: a "Test Ad" banner fills the strip at the bottom within a few seconds. No full-screen ad
+   ever shows on launch.
 2. **THEMES → ▶ +25**: a test ad plays; gems go up by 25 only after you close it. Five per day.
 3. Finish a run with at least 3 gems: **▶ 2× GEMS** doubles the gems from that run, once.
 4. Lose a run with a score of 10 or more: "Keep going?" with a 5-second ring. Watch the ad and the
@@ -268,3 +277,26 @@ by itself.
 (**Build → Generate Signed App Bundle or APK**), install it and check that it launches, signs in,
 and shows the ▶ +25 pill. Play Console answers and the pre-launch checklist are in
 `docs/PLAY_CONSOLE.md`; privacy policy and deletion page drafts are in `docs/store/`.
+
+## 12. Premium (Google Play Billing)
+
+Premium is a one-time purchase: no banner, no between-run ads (rewarded ads stay available as an
+option), and the app icon turns gold. Play remembers the purchase, so it comes back on reinstall
+or a new phone signed in to the same Google account.
+
+**Setup (once the app is on a Play testing track; Play only sells items for uploaded apps):**
+1. Play Console → your app → **Monetize with Play → Products → One-time products → Create**.
+   Product ID must be exactly **`premium`**. Set a name ("Premium"), description ("No ads and a
+   gold app icon"), and a price. **Activate** it.
+2. Play Console → **Setup → License testing**: add your Google account as a license tester so test
+   purchases are free and refunded automatically.
+3. Install the app **from the Play testing track** (not from Android Studio) on a phone signed in to
+   that account; Play Billing only works for builds Play knows about.
+
+**Test steps:**
+1. Settings → **Premium · no ads** shows the price. Tap it, complete the test purchase.
+2. "Premium unlocked. Thank you!" appears, the banner disappears, and the row says ACTIVE.
+3. Leave the app: the home-screen icon changes to the gold one (some launchers take a few seconds,
+   and a pinned shortcut may need re-adding).
+4. Uninstall and reinstall from Play: premium comes back on first launch.
+5. Refund the test order in Play Console → **Order management**: on next launch premium is removed.

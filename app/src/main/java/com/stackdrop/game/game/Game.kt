@@ -98,6 +98,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         private set
 
     private val pacing = InterstitialPacing(System::currentTimeMillis)
+
+    /** Owns the premium purchase: no banner, no interstitials, gold app icon. */
+    var premium = false
+        private set
+
+    /** Localized price from Google Play, or null until Play answers. */
+    var premiumPrice: String? = null
+        private set
     private var adShowing = false
     private var adClosedAt = -10f
     private var earned: RewardPlacement? = null
@@ -165,6 +173,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         refreshFreeToday()
         applyTheme(usableSavedTheme())
         guestAvatar = save.avatar
+        premium = save.premium
+        pacing.enabled = !premium
     }
 
     fun resize(w: Int, h: Int) {
@@ -272,6 +282,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
             is GameEvent.Confirmed -> onConfirmed(event.id)
             is GameEvent.RewardEarned -> earned = event.placement
             is GameEvent.AdClosed -> onAdClosed(event.placement)
+            is GameEvent.PremiumChanged -> onPremiumChanged(event.owned)
+            is GameEvent.PremiumPrice -> premiumPrice = event.price
             is GameEvent.NameRejected -> {
                 nameBusy = false
                 hud.showBanner(event.message)
@@ -631,6 +643,23 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     }
 
     fun showPrivacyOptions() = bridge.showPrivacyOptions()
+
+    fun buyPremium() {
+        if (!premium) bridge.buyPremium()
+    }
+
+    private fun onPremiumChanged(owned: Boolean) {
+        if (owned == premium) return
+        premium = owned
+        save.premium = owned
+        pacing.enabled = !owned
+        if (owned) {
+            hud.showBanner("Premium unlocked. Thank you!")
+            sound.play(SoundManager.UNLOCK)
+            haptics.celebrate()
+            celebrate(80)
+        }
+    }
 
     private fun showRewarded(placement: RewardPlacement) {
         earned = null

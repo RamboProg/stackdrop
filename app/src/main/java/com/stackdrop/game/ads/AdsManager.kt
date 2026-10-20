@@ -4,8 +4,14 @@ import android.app.Activity
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
 import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
@@ -19,8 +25,8 @@ import com.stackdrop.game.platform.RewardPlacement
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Keeps one rewarded and one interstitial ad preloaded and shows them on request; never waits for a
- * load. A reward is reported as RewardEarned as soon as it is earned, and AdClosed follows when the ad
+ * Shows an adaptive banner in the strip below the game, and keeps one rewarded and one
+ * interstitial ad preloaded to show on request; never waits for a load. A reward is reported as RewardEarned as soon as it is earned, and AdClosed follows when the ad
  * is gone, which is when the game applies it. Loading and showing happen on the UI thread; the
  * readiness flags are safe to read from the game thread.
  */
@@ -41,17 +47,79 @@ class AdsManager(private val activity: Activity) {
     val rewardedReady: Boolean get() = rewarded != null && fresh(rewardedAt)
     val interstitialReady: Boolean get() = interstitial != null && fresh(interstitialAt)
 
+    private var bannerSlot: FrameLayout? = null
+    private var banner: AdView? = null
+    private var sdkReady = false
+
+    /** Premium players get no banner and no interstitials; rewarded ads stay available as an option. */
+    var premium = false
+        set(value) {
+            field = value
+            handler.post { if (value) removeBanner() else loadBanner() }
+        }
+
     /** Called once consent allows ads. The SDK is initialized off the UI thread. */
     fun start() {
         if (!started.compareAndSet(false, true)) return
         Thread {
             MobileAds.initialize(activity.applicationContext) {
                 handler.post {
+                    sdkReady = true
                     loadRewarded()
                     loadInterstitial()
+                    loadBanner()
                 }
             }
         }.start()
+    }
+
+    /**
+     * The strip at the bottom of the screen the banner lives in. Its height is reserved up front so
+     * the game area never jumps when the banner arrives.
+     */
+    fun attachBannerSlot(slot: FrameLayout) {
+        bannerSlot = slot
+        slot.layoutParams.height = bannerSize().getHeightInPixels(activity)
+        slot.visibility = if (premium) View.GONE else View.VISIBLE
+    }
+
+    fun pause() = banner?.pause()
+
+    fun resume() = banner?.resume()
+
+    private fun bannerSize(): AdSize {
+        val metrics = activity.resources.displayMetrics
+        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, (metrics.widthPixels / metrics.density).toInt())
+    }
+
+    private fun loadBanner() {
+        val slot = bannerSlot ?: return
+        if (!sdkReady || premium || banner != null) return
+        slot.visibility = View.VISIBLE
+        val view = AdView(activity).apply {
+            setAdSize(bannerSize())
+            adUnitId = BuildConfig.AD_BANNER_ID
+            adListener = object : AdListener() {
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    // The AdView retries on its own refresh cycle; the reserved strip just stays empty.
+                    Log.i(TAG, "Banner not loaded: ${error.code} ${error.message}")
+                }
+            }
+        }
+        slot.addView(view, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER,
+        ))
+        banner = view
+        view.loadAd(AdRequest.Builder().build())
+    }
+
+    private fun removeBanner() {
+        banner?.destroy()
+        banner = null
+        bannerSlot?.let {
+            it.removeAllViews()
+            it.visibility = View.GONE
+        }
     }
 
     fun showRewarded(placement: RewardPlacement) = handler.post {
@@ -136,7 +204,11 @@ class AdsManager(private val activity: Activity) {
 
     private fun fresh(loadedAt: Long) = System.currentTimeMillis() - loadedAt < MAX_AGE_MS
 
-    fun release() = handler.removeCallbacksAndMessages(null)
+    fun release() {
+        handler.removeCallbacksAndMessages(null)
+        banner?.destroy()
+        banner = null
+    }
 
     private companion object {
         const val TAG = "Ads"

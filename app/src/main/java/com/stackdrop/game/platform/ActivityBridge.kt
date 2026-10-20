@@ -29,6 +29,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.stackdrop.game.ads.AdsManager
 import com.stackdrop.game.ads.ConsentManager
+import com.stackdrop.game.billing.BillingManager
 import com.stackdrop.game.game.GameEvent
 import com.stackdrop.game.online.OnlineServices
 import kotlinx.coroutines.launch
@@ -39,6 +40,7 @@ class ActivityBridge(
     private val online: OnlineServices,
     private val ads: AdsManager,
     private val consent: ConsentManager,
+    private val billing: BillingManager,
 ) : PlatformBridge {
 
     /** Set by the activity once the game exists. */
@@ -66,6 +68,8 @@ class ActivityBridge(
     override fun showPrivacyOptions() = onUi {
         consent.showPrivacyOptions { privacyRequired = consent.privacyOptionsRequired }
     }
+
+    override fun buyPremium() = onUi { billing.buy() }
 
     override fun rewardedReady() = ads.rewardedReady
 

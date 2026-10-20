@@ -17,7 +17,12 @@ val emulatorHost = providers.gradleProperty("stackdrop.emulatorHost").orElse("10
 val testAppId = "ca-app-pub-3940256099942544~3347511713"
 val testRewarded = "ca-app-pub-3940256099942544/5224354917"
 val testInterstitial = "ca-app-pub-3940256099942544/1033173712"
+val testBanner = "ca-app-pub-3940256099942544/9214589741"
 fun adProperty(name: String, test: String) = providers.gradleProperty(name).orElse(test).get()
+
+// The consent form only appears for players in the EEA, UK and Switzerland. Set this to true in
+// gradle.properties to see it on a debug build from anywhere else.
+val consentDebugEea = providers.gradleProperty("stackdrop.consentDebugEea").orElse("false").get()
 
 android {
     namespace = "com.stackdrop.game"
@@ -42,6 +47,8 @@ android {
             manifestPlaceholders["admobAppId"] = testAppId
             buildConfigField("String", "AD_REWARDED_ID", "\"$testRewarded\"")
             buildConfigField("String", "AD_INTERSTITIAL_ID", "\"$testInterstitial\"")
+            buildConfigField("String", "AD_BANNER_ID", "\"$testBanner\"")
+            buildConfigField("boolean", "CONSENT_DEBUG_EEA", consentDebugEea)
         }
         release {
             buildConfigField("boolean", "USE_EMULATORS", "false")
@@ -50,6 +57,8 @@ android {
             buildConfigField("String", "AD_REWARDED_ID", "\"${adProperty("stackdrop.admobRewardedId", testRewarded)}\"")
             buildConfigField("String", "AD_INTERSTITIAL_ID",
                 "\"${adProperty("stackdrop.admobInterstitialId", testInterstitial)}\"")
+            buildConfigField("String", "AD_BANNER_ID", "\"${adProperty("stackdrop.admobBannerId", testBanner)}\"")
+            buildConfigField("boolean", "CONSENT_DEBUG_EEA", "false")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -86,6 +95,7 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.play.services.ads)
     implementation(libs.ump)
+    implementation(libs.billing)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)

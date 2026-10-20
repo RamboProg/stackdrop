@@ -22,8 +22,9 @@ class ConsentManager(private val activity: Activity) {
     /** Updates consent, shows the form if needed, and calls [onReady] once ads may be requested. */
     fun gather(onReady: () -> Unit) {
         val params = ConsentRequestParameters.Builder().setTagForUnderAgeOfConsent(false)
-        if (BuildConfig.DEBUG) {
-            // Debug builds always act as if the device were in the EEA, so the form can be tested.
+        if (BuildConfig.CONSENT_DEBUG_EEA) {
+            // Opt-in (gradle.properties: stackdrop.consentDebugEea=true): act as if the device were
+            // in the EEA so the form can be tested from anywhere.
             params.setConsentDebugSettings(
                 ConsentDebugSettings.Builder(activity)
                     .setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)

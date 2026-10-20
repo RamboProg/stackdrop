@@ -14,6 +14,7 @@ import kotlin.math.min
 class SettingsScreen(private val game: Game, private val neon: Neon, private val widgets: Widgets) : Screen {
 
     private enum class Row(val label: String) {
+        PREMIUM("Premium · no ads"),
         SOUND("Sound"),
         VIBRATION("Vibration"),
         REDUCE_MOTION("Reduce motion"),
@@ -40,8 +41,8 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
         this.w = w
         this.h = h
         this.u = u
-        val rowH = min(h * 0.08f, u * 14f)
-        val gap = u * 2.5f
+        val rowH = min(h * 0.07f, u * 12.5f)
+        val gap = u * 2f
         var y = h * 0.2f
         for (r in rects) {
             r.set(u * 7f, y, u * 93f, y + rowH)
@@ -64,6 +65,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
         if (row == Row.VERSION) return true
         if (row == Row.VIBRATION) widgets.press(rects[i]) else game.press(rects[i])
         when (row) {
+            Row.PREMIUM -> game.buyPremium()
             Row.SOUND -> game.toggleSound()
             Row.VIBRATION -> game.toggleVibration()
             Row.REDUCE_MOTION -> game.toggleReduceMotion()
@@ -99,13 +101,14 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
             val baseline = r.centerY() + u * 1.6f
             neon.text(canvas, row.label, r.left + u * 5f, baseline, u * 4.6f, neon.textColor, 235, Paint.Align.LEFT)
             val value = when (row) {
+                Row.PREMIUM -> if (game.premium) "ACTIVE" else game.premiumPrice ?: "GET"
                 Row.SOUND -> onOff(game.save.soundOn)
                 Row.VIBRATION -> onOff(game.save.vibrationOn)
                 Row.REDUCE_MOTION -> onOff(game.reduceMotion)
                 Row.PRIVACY_OPTIONS, Row.PRIVACY_POLICY, Row.DATA_DELETION -> "OPEN"
                 Row.VERSION -> BuildConfig.VERSION_NAME
             }
-            val on = value == ON || value == "OPEN"
+            val on = value == ON || value == "OPEN" || row == Row.PREMIUM
             if (row == Row.VERSION) {
                 neon.text(canvas, value, r.right - u * 5f, baseline, u * 4f, neon.textColor, 170, Paint.Align.RIGHT)
             } else {

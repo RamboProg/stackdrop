@@ -92,6 +92,11 @@ class SaveData(context: Context) {
         }
     }
 
+    /** Last answer from Google Play about the premium purchase. Local only; Play stays the source of truth. */
+    var premium: Boolean
+        get() = prefs.getBoolean(KEY_PREMIUM, false)
+        set(v) = prefs.edit { putBoolean(KEY_PREMIUM, v) }
+
     var googleNudgeShown: Boolean
         get() = prefs.getBoolean(KEY_NUDGED, false)
         set(v) = prefs.edit { putBoolean(KEY_NUDGED, v) }
@@ -178,8 +183,11 @@ class SaveData(context: Context) {
         val sound = soundOn
         val vibration = vibrationOn
         val reduce = reduceMotion
+        // Premium was bought through Google Play, not the game account, so it survives too.
+        val owned = premium
         prefs.edit {
             clear()
+            putBoolean(KEY_PREMIUM, owned)
             putBoolean(KEY_SOUND, sound)
             putBoolean(KEY_VIBRATION, vibration)
             putBoolean(KEY_REDUCE_MOTION, reduce)
@@ -234,6 +242,7 @@ class SaveData(context: Context) {
         const val KEY_NEW_BESTS = "new_bests"
         const val KEY_NUDGED = "google_nudged"
         const val KEY_PENDING_RUNS = "pending_runs"
+        const val KEY_PREMIUM = "premium"
         const val KEY_FREE_GEMS_DAY = "free_gems_day"
         const val KEY_FREE_GEMS_USED = "free_gems_used"
         const val FREE_GEMS_PER_DAY = 5

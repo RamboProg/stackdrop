@@ -49,5 +49,11 @@ sealed class GameEvent {
     data class RewardEarned(val placement: RewardPlacement) : GameEvent()
     data class AdClosed(val placement: RewardPlacement?) : GameEvent()
     data class RankPassed(val friendName: String, val friendScore: Int) : GameEvent()
+
+    /** Google Play says whether this player owns premium. */
+    data class PremiumChanged(val owned: Boolean) : GameEvent()
+
+    /** Localized premium price, or null when Play cannot sell it right now. */
+    data class PremiumPrice(val price: String?) : GameEvent()
     data object Back : GameEvent()
 }

@@ -23,13 +23,37 @@
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity">
+            tools:ignore="LockedOrientationActivity" />
+
+        <!-- Two launcher entries for the same activity; exactly one is enabled at a time
+             (LauncherIcon.kt), so premium players see the gold icon. -->
+        <activity-alias
+            android:name=".LauncherDefault"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherPremium"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_premium"
+            android:roundIcon="@mipmap/ic_launcher_premium_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>

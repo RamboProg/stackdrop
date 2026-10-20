@@ -8,8 +8,11 @@ updates it.
 
 - [ ] Privacy policy hosted (draft: `docs/store/privacy-policy.md`) and its URL in `ui/Links.kt`
 - [ ] Account deletion page hosted (draft: `docs/store/account-deletion.md`) and its URL in `ui/Links.kt`
-- [ ] Real AdMob IDs in `gradle.properties`: `stackdrop.admobAppId`, `stackdrop.admobRewardedId`,
-      `stackdrop.admobInterstitialId` (without them release builds show test ads and earn nothing)
+- [ ] Real AdMob IDs in `gradle.properties`: `stackdrop.admobAppId`, `stackdrop.admobBannerId`,
+      `stackdrop.admobRewardedId`, `stackdrop.admobInterstitialId` (without them release builds show
+      test ads and earn nothing)
+- [ ] One-time product `premium` created and active (Monetize with Play → Products), and a payments
+      profile set up (see `OWNER_SETUP.md` section 12)
 - [ ] GDPR consent message published in AdMob → Privacy & messaging
 - [ ] `app-ads.txt` on the developer website listed in Play Console (AdMob → Apps → app-ads.txt)
 - [ ] Play App Signing SHA-1 and SHA-256 added in Firebase (see `OWNER_SETUP.md`, Fingerprints)
@@ -49,8 +52,10 @@ updates it.
 | App info and performance → Crash logs, Diagnostics (AdMob) | Yes | Yes | Required | Advertising or marketing, Analytics |
 | Device or other IDs (advertising ID, AdMob; App Check) | Yes | Yes | Required | Advertising or marketing, Fraud prevention, security and compliance |
 
-Not collected: financial info, health, messages, photos or videos, audio, files, calendar,
-contacts, precise location, web browsing, installed apps.
+| Financial info → Purchase history (premium, through Google Play) | Yes | No | Optional | App functionality |
+
+Not collected: payment card or bank details (Google Play handles payment), health, messages,
+photos or videos, audio, files, calendar, contacts, precise location, web browsing, installed apps.
 
 "Shared" above means passed to Google for advertising. Data sent to Firebase is processed by Google
 on your behalf as a service provider, which Play does not count as sharing.

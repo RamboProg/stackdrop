@@ -19,6 +19,7 @@ This is not legal advice.*
 | Run statistics: score, duration, number of drops and perfect drops | When a run is sent to the leaderboard | To check that scores are genuine |
 | Device integrity information (Firebase App Check with Google Play Integrity) | When the game talks to its servers | To block fake or modified copies of the game |
 | Advertising ID, approximate location from your IP address, device and app information | By Google AdMob, only after you give any consent required in your region | To show ads and measure them |
+| Whether you bought Premium | When you buy it, and checked with Google Play at each launch | To remove ads and restore your purchase on reinstall. Payment is handled entirely by Google Play; we never see your card details |
 
 Stack Drop never shows or stores your Google profile photo, has no chat, and does not ask for
 your real name, location, contacts or photos.
