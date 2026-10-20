@@ -14,6 +14,10 @@ class SoundManager(context: Context) {
     @Volatile
     var muted = false
 
+    /** Effects stay silent while a full-screen ad is up, whatever the sound setting. */
+    @Volatile
+    var suppressed = false
+
     private val appContext = context.applicationContext
 
     private val pool = SoundPool.Builder()
@@ -53,7 +57,7 @@ class SoundManager(context: Context) {
     }
 
     fun play(name: String, rate: Float = 1f, volume: Float = 1f) {
-        if (muted) return
+        if (muted || suppressed) return
         val id = ids[name] ?: return
         pool.play(id, volume, volume, 1, 0, rate.coerceIn(0.5f, 2f))
     }

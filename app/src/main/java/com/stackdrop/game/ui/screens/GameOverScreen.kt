@@ -12,6 +12,8 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
 
     private val menuButton = RectF()
     private val retryButton = RectF()
+    private val nameButton = RectF()
+    private val doubleButton = RectF()
 
     private var w = 0f
     private var h = 0f
@@ -24,11 +26,23 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
         val over = h * 0.76f
         retryButton.set(u * 22f, over, u * 78f, over + u * 13f)
         menuButton.set(u * 32f, over + u * 16f, u * 68f, over + u * 26f)
+        nameButton.set(u * 22f, over - u * 13f, u * 78f, over - u * 3f)
+        val gemsY = h * 0.09f + u * 43f
+        doubleButton.set(u * 64f, gemsY - u * 6f, u * 94f, gemsY + u * 2f)
     }
+
+    /** A guest's new best can join the leaderboard once they pick a name. */
+    private fun offerName() = game.newBest && game.profile == null && game.onlineAvailable
 
     override fun onTap(x: Float, y: Float): Boolean {
         if (game.stateTime < Game.RESTART_DELAY) return true
-        if (menuButton.contains(x, y)) {
+        if (game.canDoubleGems && doubleButton.contains(x, y)) {
+            game.press(doubleButton)
+            game.watchForDoubleGems()
+        } else if (offerName() && nameButton.contains(x, y)) {
+            game.press(nameButton)
+            game.editName()
+        } else if (menuButton.contains(x, y)) {
             game.press(menuButton)
             game.leaveGameOver()
         } else {
@@ -78,8 +92,12 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
         if (mode.bestCombo > 1) {
             neon.text(canvas, "BEST COMBO x${mode.bestCombo}", w / 2f, top + u * 50f, u * 4f, text, 180)
         }
+        game.rankLine?.let { neon.glowText(canvas, it, w / 2f, top + u * 57f, u * 4.6f, text, accent2) }
+        game.passedLine?.let { neon.glowText(canvas, it, w / 2f, top + u * 64f, u * 4.2f, text, accent) }
 
         if (t > Game.RESTART_DELAY) {
+            if (game.canDoubleGems) widgets.pill(canvas, doubleButton, "▶ 2× GEMS", accent2)
+            if (offerName()) widgets.pill(canvas, nameButton, "PUT MY NAME UP", accent)
             widgets.pill(canvas, retryButton, "RETRY", accent2, highlight = true, breathe = 1f + 0.04f * pulse)
             widgets.pill(canvas, menuButton, "MENU", accent)
         }

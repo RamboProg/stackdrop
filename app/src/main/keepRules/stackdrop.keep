@@ -1,0 +1,7 @@
+# WorkManager, pulled in by the Mobile Ads SDK, uses Room 2.2. Room creates the generated
+# WorkDatabase_Impl by reflection through its no-argument constructor. Room's own library rule
+# keeps the class but not that constructor, so R8 full mode removes it and the app crashes on
+# launch ("Failed to create an instance of androidx.work.impl.WorkDatabase").
+-keep class * extends androidx.room.RoomDatabase {
+    <init>();
+}

@@ -5,11 +5,12 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import com.stackdrop.game.online.OnlineApi
 import com.stackdrop.game.platform.PlatformBridge
 
-class GameView(context: Context, bridge: PlatformBridge) : SurfaceView(context), SurfaceHolder.Callback {
+class GameView(context: Context, bridge: PlatformBridge, online: OnlineApi) : SurfaceView(context), SurfaceHolder.Callback {
 
-    private val game = Game(context, bridge)
+    private val game = Game(context, bridge, online)
     private var loop: GameLoop? = null
 
     init {

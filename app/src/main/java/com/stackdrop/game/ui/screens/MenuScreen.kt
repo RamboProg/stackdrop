@@ -1,19 +1,29 @@
 package com.stackdrop.game.ui.screens
 
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.RectF
 import com.stackdrop.game.game.Game
 import com.stackdrop.game.game.GameMode
 import com.stackdrop.game.game.Palette
+import com.stackdrop.game.ui.Avatars
 import com.stackdrop.game.ui.Neon
 import com.stackdrop.game.ui.Widgets
 import kotlin.math.sin
 
-class MenuScreen(private val game: Game, private val neon: Neon, private val widgets: Widgets) : Screen {
+class MenuScreen(
+    private val game: Game,
+    private val neon: Neon,
+    private val widgets: Widgets,
+    private val avatars: Avatars,
+) : Screen {
 
     private val themesButton = RectF()
+    private val ranksButton = RectF()
+    private val friendsButton = RectF()
     private val giftButton = RectF()
     private val settingsButton = RectF()
+    private val profileChip = RectF()
     private val modeCards = List(2) { RectF() }
 
     private var w = 0f
@@ -27,11 +37,18 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
 
         val row = h * 0.88f
         val bh = u * 11f
-        themesButton.set(u * 6f, row, u * 48f, row + bh)
-        giftButton.set(u * 52f, row, u * 94f, row + bh)
+        val gapX = u * 2f
+        val bw = (u * 92f - gapX * 3f) / 4f
+        var bx = u * 4f
+        for (b in listOf(themesButton, ranksButton, friendsButton, giftButton)) {
+            b.set(bx, row, bx + bw, row + bh)
+            bx += bw + gapX
+        }
 
         val gearY = h * 0.06f - u * 1.6f
         settingsButton.set(w - u * 11f, gearY - u * 4.5f, w - u * 2f, gearY + u * 4.5f)
+        val chipY = h * 0.045f
+        profileChip.set(u * 3f, chipY - u * 3.5f, u * 34f, chipY + u * 3.5f)
 
         val cardTop = h * 0.6f
         val cardH = u * 28f
@@ -50,9 +67,21 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
                 game.press(themesButton)
                 game.openThemes()
             }
+            ranksButton.contains(x, y) -> {
+                game.press(ranksButton)
+                game.openLeaderboard()
+            }
+            friendsButton.contains(x, y) -> {
+                game.press(friendsButton)
+                game.openFriends()
+            }
             settingsButton.contains(x, y) -> {
                 game.press(settingsButton)
                 game.openSettings()
+            }
+            profileChip.contains(x, y) -> {
+                game.press(profileChip)
+                game.openProfile()
             }
             giftButton.contains(x, y) -> {
                 game.press(giftButton)
@@ -84,6 +113,11 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
         for ((i, m) in game.modes.withIndex()) drawModeCard(canvas, modeCards[i], m, i, m === game.mode, pulse)
 
         widgets.pill(canvas, themesButton, "THEMES", accent)
+        widgets.pill(canvas, ranksButton, "RANKS", accent)
+        widgets.pill(canvas, friendsButton, "FRIENDS", accent)
+        if (game.hasFriendRequests) {
+            neon.dot(canvas, friendsButton.right - u * 2f, friendsButton.top + u * 1.5f, u * 1.1f, accent2)
+        }
         if (game.save.canClaimDaily()) {
             widgets.pill(canvas, giftButton, "GIFT!", accent2, highlight = true, breathe = 1f + 0.05f * pulse)
         } else {
@@ -91,6 +125,27 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
         }
         widgets.gear(canvas, settingsButton, accent)
         widgets.gems(canvas, game.save.gems, inset = u * 11f)
+        drawProfileChip(canvas, accent2)
+    }
+
+    /** Avatar and name; "Guest" before a name is chosen, with a small dot inviting Google sign-in. */
+    private fun drawProfileChip(canvas: Canvas, accent2: Int) {
+        val r = profileChip
+        canvas.save()
+        val s = widgets.pressScale(r)
+        canvas.scale(s, s, r.centerX(), r.centerY())
+        neon.panel(canvas, r, r.height() / 2f, 130)
+        val ar = r.height() * 0.4f
+        val ax = r.left + r.height() / 2f
+        avatars.draw(canvas, game.avatar, ax, r.centerY(), ar)
+        val name = game.profile?.name ?: "Guest"
+        val label = if (name.length > CHIP_CHARS) name.take(CHIP_CHARS - 1) + "…" else name
+        neon.text(canvas, label, ax + ar + u * 1.8f, r.centerY() + u * 1.2f, u * 3.4f, neon.textColor, 230,
+            Paint.Align.LEFT)
+        if (game.onlineAvailable && game.account.anonymous) {
+            neon.dot(canvas, ax + ar * 0.8f, r.centerY() - ar * 0.8f, u * 0.7f, accent2)
+        }
+        canvas.restore()
     }
 
     private fun drawModeCard(canvas: Canvas, r: RectF, mode: GameMode, index: Int, selected: Boolean, pulse: Float) {
@@ -116,5 +171,9 @@ class MenuScreen(private val game: Game, private val neon: Neon, private val wid
         neon.text(canvas, "BEST ${game.save.best(mode.id)}", r.centerX(), r.top + r.height() * 0.89f, u * 3.6f,
             neon.textColor, 170)
         canvas.restore()
+    }
+
+    private companion object {
+        const val CHIP_CHARS = 10
     }
 }
