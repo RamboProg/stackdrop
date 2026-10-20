@@ -61,6 +61,14 @@ object CalmThemes {
             accent = 0xFFA9B8CC, accent2 = 0xFFC9D2DE, text = 0xFFE6E9EE, textDim = 0xFFA3ABB8,
             panel = 0xFF101216, danger = 0xFFE0868A, light = false,
         ),
+        // Premium only, matching the gold app icon.
+        calm(
+            "gilded", "Gilded", 0, "regal", baseHue = 42f, hueRange = 10f, sat = 0.40f, value = 0.86f,
+            skyTop = 0xFF1C1530, skyMid = 0xFF2E2244, skyBottom = 0xFF4A3555, ground = 0xFF241A33,
+            scenery = Scenery.HILLS, ambient = Ambient.MOTES,
+            accent = 0xFFE9C46A, accent2 = 0xFFF4D58D, text = 0xFFF7F0E1, textDim = 0xFFCFC3A8,
+            panel = 0xFF17112A, danger = 0xFFE8897F, light = false, premiumOnly = true,
+        ),
     )
 
     /** Hue swings gently within the theme's band; every other layer is a little darker. */
@@ -73,7 +81,7 @@ object CalmThemes {
         skyTop: Long, skyMid: Long, skyBottom: Long, ground: Long,
         scenery: Scenery, ambient: Ambient,
         accent: Long, accent2: Long, text: Long, textDim: Long, panel: Long, danger: Long,
-        light: Boolean, milestone: Milestone? = null,
+        light: Boolean, milestone: Milestone? = null, premiumOnly: Boolean = false,
     ) = Theme(
         id = id, name = name, cost = cost, family = Family.CALM, mood = mood,
         baseHue = baseHue, hueStep = HUE_STEP, hueRange = hueRange, sat = sat, value = value, valueWave = LAYER_STEP,
@@ -82,7 +90,7 @@ object CalmThemes {
         accent = accent.toInt(), accent2 = accent2.toInt(), text = text.toInt(), textDim = textDim.toInt(),
         panel = panel.toInt(), danger = danger.toInt(),
         glow = GLOW, scanlines = false, vignette = VIGNETTE, shake = SHAKE, particles = PARTICLES,
-        light = light, milestone = milestone,
+        light = light, milestone = milestone, premiumOnly = premiumOnly,
     )
 
     /** Radians per level: the hue swings through its band over about 28 floors. */

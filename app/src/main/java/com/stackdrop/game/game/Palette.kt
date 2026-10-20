@@ -51,6 +51,8 @@ data class Theme(
     /** Light sky: dark text and softer shadows. */
     val light: Boolean,
     val milestone: Milestone? = null,
+    /** Only available to players who bought premium; it cannot be bought with gems. */
+    val premiumOnly: Boolean = false,
     /** Neon only: the synthwave sky, skyline and street derive from these and drift with the tower hue. */
     val bgHue: Float = 0f,
     val bgSat: Float = 0f,

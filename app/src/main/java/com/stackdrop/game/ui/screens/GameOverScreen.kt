@@ -88,6 +88,7 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
         val tw = neon.measure(gems, u * 6f)
         neon.glowText(canvas, gems, w / 2f - u * 2.5f, top + u * 43f, u * 6f, text, Neon.GEM)
         neon.gem(canvas, w / 2f - u * 2.5f + tw / 2f + u * 4f, top + u * 41f, u * 2.6f)
+        if (game.premium) neon.text(canvas, "PREMIUM ×2", w / 2f, top + u * 46.5f, u * 2.8f, Neon.GOLD, 220)
 
         if (mode.bestCombo > 1) {
             neon.text(canvas, "BEST COMBO x${mode.bestCombo}", w / 2f, top + u * 50f, u * 4f, text, 180)

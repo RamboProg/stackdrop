@@ -658,6 +658,11 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
             sound.play(SoundManager.UNLOCK)
             haptics.celebrate()
             celebrate(80)
+            // Bought while previewing Gilded: keep it on.
+            if (previewing && theme.premiumOnly) commitTheme(theme)
+        } else if (state == State.MENU || state == State.SETTINGS) {
+            // Refunded: a premium theme in use falls back to the last owned one.
+            expireFreeTheme()
         }
     }
 
@@ -721,7 +726,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private fun endRun() {
         pacing.onRunEnded()
         setState(State.GAME_OVER)
-        gemsEarned = mode.gemsEarned
+        gemsEarned = mode.gemsEarned * (if (premium) PREMIUM_GEM_MULTIPLIER else 1)
         save.gems += gemsEarned
         save.gamesPlayed++
         val previousBest = save.best(mode.id)
@@ -807,6 +812,15 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
                 sound.play(SoundManager.BUTTON)
                 haptics.ui()
                 if (!save.isUnlocked(t.id)) hud.showBanner("${t.name} is free today")
+            }
+            // Premium themes preview like any other; the second tap offers premium instead of gems.
+            t.premiumOnly -> if (t.id != theme.id) {
+                applyTheme(t)
+                sound.play(SoundManager.BUTTON)
+                haptics.ui()
+                hud.showBanner("Premium theme. Tap again to get it")
+            } else {
+                buyPremium()
             }
             t.id != theme.id -> {
                 applyTheme(t)
@@ -946,6 +960,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         private const val REVIVE_MIN_SCORE = 10
         private const val DOUBLE_MIN_GEMS = 3
         private const val FREE_GEMS = 25
+        private const val PREMIUM_GEM_MULTIPLIER = 2
         private const val AD_TAP_GUARD = 0.3f
         private const val NUDGE_AFTER_BESTS = 3
     }

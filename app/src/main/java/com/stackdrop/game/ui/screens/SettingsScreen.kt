@@ -14,7 +14,7 @@ import kotlin.math.min
 class SettingsScreen(private val game: Game, private val neon: Neon, private val widgets: Widgets) : Screen {
 
     private enum class Row(val label: String) {
-        PREMIUM("Premium · no ads"),
+        PREMIUM("Premium"),
         SOUND("Sound"),
         VIBRATION("Vibration"),
         REDUCE_MOTION("Reduce motion"),
@@ -99,7 +99,15 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
             neon.roundRect(canvas, r, radius, accent, u * 0.3f, 90)
 
             val baseline = r.centerY() + u * 1.6f
-            neon.text(canvas, row.label, r.left + u * 5f, baseline, u * 4.6f, neon.textColor, 235, Paint.Align.LEFT)
+            if (row == Row.PREMIUM) {
+                // What premium includes, under its name.
+                neon.text(canvas, row.label, r.left + u * 5f, r.centerY() - u * 0.2f, u * 4.6f, neon.textColor, 235,
+                    Paint.Align.LEFT)
+                neon.text(canvas, PREMIUM_PERKS, r.left + u * 5f, r.centerY() + u * 3.6f, u * 2.8f,
+                    game.theme.textDim, 230, Paint.Align.LEFT)
+            } else {
+                neon.text(canvas, row.label, r.left + u * 5f, baseline, u * 4.6f, neon.textColor, 235, Paint.Align.LEFT)
+            }
             val value = when (row) {
                 Row.PREMIUM -> if (game.premium) "ACTIVE" else game.premiumPrice ?: "GET"
                 Row.SOUND -> onOff(game.save.soundOn)
@@ -125,6 +133,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
 
     private companion object {
         const val VEIL = 170
+        const val PREMIUM_PERKS = "No ads · 2× gems · Gilded theme"
         const val ON = "ON"
         const val OFF = "OFF"
     }

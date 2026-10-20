@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.stackdrop.game.game.Palette
+import com.stackdrop.game.game.ThemeRules
 import java.util.TimeZone
 import kotlin.math.min
 
@@ -113,9 +114,8 @@ class SaveData(context: Context) {
     /** Free themes, bought themes, and themes whose milestone the player has reached. */
     fun isUnlocked(id: String): Boolean {
         val theme = Palette.find(id) ?: return false
-        if (theme.cost == 0 || id in unlocked()) return true
-        val m = theme.milestone ?: return false
-        return best(m.modeId) >= m.score
+        val milestoneBest = theme.milestone?.let { best(it.modeId) } ?: 0
+        return ThemeRules.isUnlocked(theme, id in unlocked(), milestoneBest, premium)
     }
 
     fun unlock(id: String) = change { putStringSet(KEY_UNLOCKED, unlocked() + id) }

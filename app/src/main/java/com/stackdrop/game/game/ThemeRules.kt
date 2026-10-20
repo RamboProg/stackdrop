@@ -3,9 +3,20 @@ package com.stackdrop.game.game
 /** Theme unlock rules that do not depend on storage, kept apart so they can be unit tested. */
 object ThemeRules {
 
-    /** One locked theme anyone may use today; it rotates with the local day number. */
+    /**
+     * Premium-only themes follow the premium purchase alone. Every other theme is free, bought with
+     * gems, or earned by reaching its milestone ([milestoneBest] is the best in that mode).
+     */
+    fun isUnlocked(theme: Theme, bought: Boolean, milestoneBest: Int, premium: Boolean): Boolean {
+        if (theme.premiumOnly) return premium
+        if (theme.cost == 0 || bought) return true
+        val m = theme.milestone ?: return false
+        return milestoneBest >= m.score
+    }
+
+    /** One locked theme anyone may use today; it rotates with the local day number. Never a premium theme. */
     fun freeToday(themes: List<Theme>, day: Long, owned: (Theme) -> Boolean): Theme? {
-        val locked = themes.filter { it.cost > 0 && !owned(it) }
+        val locked = themes.filter { it.cost > 0 && !it.premiumOnly && !owned(it) }
         if (locked.isEmpty()) return null
         return locked[day.mod(locked.size.toLong()).toInt()]
     }

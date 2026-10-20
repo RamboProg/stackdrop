@@ -280,23 +280,36 @@ and shows the ▶ +25 pill. Play Console answers and the pre-launch checklist ar
 
 ## 12. Premium (Google Play Billing)
 
-Premium is a one-time purchase: no banner, no between-run ads (rewarded ads stay available as an
-option), and the app icon turns gold. Play remembers the purchase, so it comes back on reinstall
-or a new phone signed in to the same Google account.
+Premium is a one-time purchase with four perks:
+- no banner and no between-run ads (rewarded ads stay available as an option),
+- **2× gems** from every run (shown as "PREMIUM ×2" on game over),
+- the **Gilded** calm theme (gold blocks; players without premium can preview it, and a second
+  tap opens the purchase),
+- a gold app icon.
+
+Play remembers the purchase, so it comes back on reinstall or a new phone signed in to the same
+Google account. A refund removes all four; if Gilded was in use the game switches back to a theme
+the player owns.
 
 **Setup (once the app is on a Play testing track; Play only sells items for uploaded apps):**
 1. Play Console → your app → **Monetize with Play → Products → One-time products → Create**.
-   Product ID must be exactly **`premium`**. Set a name ("Premium"), description ("No ads and a
-   gold app icon"), and a price. **Activate** it.
+   Product ID must be exactly **`premium`**. Set a name ("Premium"), description ("No ads, 2× gems
+   from every run, the Gilded theme and a gold app icon"), and a price. **Activate** it.
 2. Play Console → **Setup → License testing**: add your Google account as a license tester so test
    purchases are free and refunded automatically.
 3. Install the app **from the Play testing track** (not from Android Studio) on a phone signed in to
    that account; Play Billing only works for builds Play knows about.
 
 **Test steps:**
-1. Settings → **Premium · no ads** shows the price. Tap it, complete the test purchase.
+1. Settings → **Premium** ("No ads · 2× gems · Gilded theme") shows GET. Tap it, complete the
+   test purchase.
 2. "Premium unlocked. Thank you!" appears, the banner disappears, and the row says ACTIVE.
-3. Leave the app: the home-screen icon changes to the gold one (some launchers take a few seconds,
+3. Play a run: game over shows "PREMIUM ×2" and the gem count is doubled.
+4. **THEMES → Gilded** now applies straight away. (Before buying: the first tap previews it with
+   "Premium theme. Tap again to get it"; the second tap opens the purchase; leaving the screen
+   reverts the preview.) Buying from the Gilded row keeps Gilded selected.
+5. Leave the app: the home-screen icon changes to the gold one (some launchers take a few seconds,
    and a pinned shortcut may need re-adding).
-4. Uninstall and reinstall from Play: premium comes back on first launch.
-5. Refund the test order in Play Console → **Order management**: on next launch premium is removed.
+6. Uninstall and reinstall from Play: premium comes back on first launch.
+7. Refund the test order in Play Console → **Order management**: on next launch premium is removed,
+   gems go back to 1×, and Gilded is replaced by an owned theme.

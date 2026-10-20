@@ -172,6 +172,7 @@ class ThemesScreen(private val game: Game, private val neon: Neon, private val w
             inUse -> neon.text(canvas, "IN USE", right, row.centerY() + u * 1.4f, u * 3.6f, text, 200, Paint.Align.RIGHT)
             owned -> neon.text(canvas, "OWNED", right, row.centerY() + u * 1.4f, u * 3.6f, text, 170, Paint.Align.RIGHT)
             freeToday -> widgets.chip(canvas, "FREE TODAY", right, row.centerY(), current.accent2, alignRight = true)
+            t.premiumOnly -> widgets.chip(canvas, "PREMIUM", right, row.centerY(), PREMIUM_GOLD, alignRight = true)
             else -> drawPrice(canvas, t, right)
         }
     }
@@ -196,6 +197,7 @@ class ThemesScreen(private val game: Game, private val neon: Neon, private val w
 
     private companion object {
         const val VEIL = 120
+        const val PREMIUM_GOLD = 0xFFE9C46A.toInt()
         val TAB_LABELS = arrayOf("CALM", "NEON")
     }
 }

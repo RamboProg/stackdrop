@@ -38,6 +38,32 @@ class ThemeRulesTest {
     }
 
     @Test
+    fun premiumThemesFollowThePurchaseOnly() {
+        val gilded = id("gilded")
+        assertEquals(false, ThemeRules.isUnlocked(gilded, bought = false, milestoneBest = 0, premium = false))
+        // Gems or a stray unlock record never open it; only premium does.
+        assertEquals(false, ThemeRules.isUnlocked(gilded, bought = true, milestoneBest = 0, premium = false))
+        assertEquals(true, ThemeRules.isUnlocked(gilded, bought = false, milestoneBest = 0, premium = true))
+    }
+
+    @Test
+    fun otherThemesUnlockByPriceOrMilestone() {
+        assertEquals(true, ThemeRules.isUnlocked(id("dusk"), false, 0, false))
+        assertEquals(false, ThemeRules.isUnlocked(id("mist"), false, 0, false))
+        assertEquals(true, ThemeRules.isUnlocked(id("mist"), true, 0, false))
+        assertEquals(false, ThemeRules.isUnlocked(id("aurora"), false, 24, false))
+        assertEquals(true, ThemeRules.isUnlocked(id("aurora"), false, 25, false))
+    }
+
+    @Test
+    fun freeThemeIsNeverThePremiumOne() {
+        for (day in 0L..20L) {
+            val free = ThemeRules.freeToday(themes, day) { false }
+            assertEquals(false, free?.premiumOnly)
+        }
+    }
+
+    @Test
     fun milestoneHintNamesTheMode() {
         assertEquals("or reach 25 in Tower", ThemeRules.milestoneHint(Milestone("tower", 25)))
     }

@@ -16,11 +16,12 @@ class CalmThemesTest {
     )
 
     @Test
-    fun sevenThemesWithFreeDuskFirst() {
-        assertEquals(7, themes.size)
+    fun eightThemesWithFreeDuskFirstAndOnePremium() {
+        assertEquals(8, themes.size)
         assertEquals("dusk", themes[0].id)
         assertEquals(0, themes[0].cost)
         assertTrue(themes.all { it.family == Family.CALM })
+        assertEquals(listOf("gilded"), themes.filter { it.premiumOnly }.map { it.id })
     }
 
     @Test
