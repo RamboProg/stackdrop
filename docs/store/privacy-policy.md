@@ -19,6 +19,7 @@ This is not legal advice.*
 | Run statistics: score, duration, number of drops and perfect drops | When a run is sent to the leaderboard | To check that scores are genuine |
 | Device integrity information (Firebase App Check with Google Play Integrity) | When the game talks to its servers | To block fake or modified copies of the game |
 | Advertising ID, approximate location from your IP address, device and app information | By Google AdMob, only after you give any consent required in your region | To show ads and measure them |
+| Crash reports: what the game was doing when it crashed (stack trace), device model, Android version, app version, a random installation ID | Automatically when the game crashes (release versions only), using Firebase Crashlytics | To find and fix bugs |
 | Whether you bought Premium | When you buy it, and checked with Google Play at each launch | To remove ads and restore your purchase on reinstall. Payment is handled entirely by Google Play; we never see your card details |
 
 Stack Drop never shows or stores your Google profile photo, has no chat, and does not ask for
@@ -31,7 +32,7 @@ your real name, location, contacts or photos.
 - **Your friends** see the same, plus that you are friends.
 - **Only you** can read your saved progress.
 - **Google** processes the data on our behalf: Firebase (Authentication, Cloud Firestore,
-  Cloud Functions, App Check) stores and serves it, and AdMob serves ads. See
+  Cloud Functions, App Check, Crashlytics) stores and serves it, and AdMob serves ads. See
   <https://policies.google.com/privacy>.
 
 We do not sell your data.

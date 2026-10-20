@@ -18,6 +18,8 @@ updates it.
 - [ ] Play App Signing SHA-1 and SHA-256 added in Firebase (see `OWNER_SETUP.md`, Fingerprints)
 - [ ] App Check enforced for Firestore and Cloud Functions once release builds sync correctly
 - [ ] Debug App Check tokens deleted (App Check → Manage debug tokens)
+- [ ] Crashlytics enabled in Firebase console, and `stackdrop.crashlyticsDebug` not left on in
+      `gradle.properties` (see `OWNER_SETUP.md` section 13)
 - [ ] Google "G" on the sign-in button replaced with the official asset
 
 ## App content
@@ -49,9 +51,9 @@ updates it.
 | App activity → App interactions (scores, run statistics) | Yes | No | Required | App functionality, Fraud prevention, security and compliance |
 | App activity → Other user-generated content (friend list, friend requests) | Yes | No | Optional | App functionality |
 | Location → Approximate location (AdMob, from IP) | Yes | Yes | Required | Advertising or marketing, Fraud prevention |
-| App info and performance → Crash logs, Diagnostics (AdMob) | Yes | Yes | Required | Advertising or marketing, Analytics |
-| Device or other IDs (advertising ID, AdMob; App Check) | Yes | Yes | Required | Advertising or marketing, Fraud prevention, security and compliance |
-
+| App info and performance → Crash logs (Crashlytics) | Yes | No | Required | Analytics |
+| App info and performance → Diagnostics (AdMob, Crashlytics) | Yes | Yes | Required | Advertising or marketing, Analytics |
+| Device or other IDs (advertising ID, AdMob; App Check; Crashlytics installation ID) | Yes | Yes | Required | Advertising or marketing, Analytics, Fraud prevention, security and compliance |
 | Financial info → Purchase history (premium, through Google Play) | Yes | No | Optional | App functionality |
 
 Not collected: payment card or bank details (Google Play handles payment), health, messages,

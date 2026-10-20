@@ -313,3 +313,27 @@ the player owns.
 6. Uninstall and reinstall from Play: premium comes back on first launch.
 7. Refund the test order in Play Console → **Order management**: on next launch premium is removed,
    gems go back to 1×, and Gilded is replaced by an owned theme.
+
+## 13. Crash reports (Firebase Crashlytics)
+
+Release builds send a report to Firebase whenever the game crashes; debug builds do not, so
+development crashes don't fill the dashboard. Reports appear in Firebase console → **Crashlytics**
+(open it once and click **Enable Crashlytics** if it asks).
+
+**Readable stack traces:** release builds are shrunk by R8, which renames classes. Every release
+build uploads its mapping file automatically (`uploadCrashlyticsMappingFileRelease`, needs an
+internet connection while building), so the dashboard shows the original names.
+
+**Test it:**
+1. Add `stackdrop.crashlyticsDebug=true` to `gradle.properties` and run the debug build.
+2. With the game open, force a crash from a terminal. Use the process ID, not the package name
+   (the package name also matches the ad's web process):
+   ```
+   adb shell am crash $(adb shell pidof com.stackdrop.game)
+   ```
+3. Open the game again (reports are sent on the next launch). The crash
+   `CrashedByAdbException: shell-induced crash` appears in Crashlytics within a few minutes.
+4. Remove the property again.
+
+Native crashes (inside Android's graphics or audio libraries) are not reported; the game has no
+native code of its own, so this only matters for device driver bugs.

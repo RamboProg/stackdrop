@@ -5,7 +5,13 @@ plugins {
 // Firebase stays off until app/google-services.json is added; the game then simply runs offline.
 if (file("google-services.json").exists()) {
     apply(plugin = libs.plugins.google.services.get().pluginId)
+    // Uploads R8 mapping files with release builds so crash reports show readable stack traces.
+    apply(plugin = libs.plugins.firebase.crashlytics.get().pluginId)
 }
+
+// Crash reports are sent from release builds only, so development crashes don't fill the
+// dashboard. Set stackdrop.crashlyticsDebug=true in gradle.properties to test from a debug build.
+val crashlyticsDebug = providers.gradleProperty("stackdrop.crashlyticsDebug").orElse("false").get()
 
 // Debug builds talk to the local Firebase Emulator Suite when gradle.properties sets
 // stackdrop.useEmulators=true. 10.0.2.2 is the host machine as seen from the Android emulator.
@@ -49,6 +55,7 @@ android {
             buildConfigField("String", "AD_INTERSTITIAL_ID", "\"$testInterstitial\"")
             buildConfigField("String", "AD_BANNER_ID", "\"$testBanner\"")
             buildConfigField("boolean", "CONSENT_DEBUG_EEA", consentDebugEea)
+            manifestPlaceholders["crashlyticsEnabled"] = crashlyticsDebug
         }
         release {
             buildConfigField("boolean", "USE_EMULATORS", "false")
@@ -59,6 +66,7 @@ android {
                 "\"${adProperty("stackdrop.admobInterstitialId", testInterstitial)}\"")
             buildConfigField("String", "AD_BANNER_ID", "\"${adProperty("stackdrop.admobBannerId", testBanner)}\"")
             buildConfigField("boolean", "CONSENT_DEBUG_EEA", "false")
+            manifestPlaceholders["crashlyticsEnabled"] = "true"
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -90,6 +98,7 @@ dependencies {
     implementation(libs.firebase.functions)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
