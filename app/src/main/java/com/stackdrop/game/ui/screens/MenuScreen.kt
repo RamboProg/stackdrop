@@ -105,7 +105,8 @@ class MenuScreen(
         // Reduce motion keeps the title still.
         val titleTime = if (game.reduceMotion) 0f else t
 
-        val titleY = h * 0.12f
+        // Kept clear of the gem counter on short screens (or above the banner strip).
+        val titleY = h * 0.12f + u * 3f
         neon.chroma(canvas, "STACK", w / 2f, titleY, u * 17f, titleTime, accent)
         neon.chroma(canvas, "DROP", w / 2f, titleY + u * 15f, u * 17f, titleTime + 0.7f, accent)
         neon.text(canvas, "ARCADE TOWERS", w / 2f, titleY + u * 22f, u * 3.6f, neon.textColor, 150)
