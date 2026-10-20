@@ -24,13 +24,32 @@ interface GameMode {
     /** The ending animation is done and the game-over screen can appear. */
     val isFinished: Boolean
 
+    /** What the leaderboard function needs to judge whether a run is plausible. */
+    val runStats: RunStats
+
     fun resize(width: Int, height: Int)
     fun reset(theme: Theme)
     fun update(dt: Float)
     fun onTap()
+
+    /** Whether the run that just ended can continue after a rewarded second chance. */
+    fun canRevive(): Boolean
+
+    /** Undoes the ending so play continues; the run is then marked as revived. */
+    fun revive()
     fun render(canvas: Canvas, time: Float)
     fun drawHud(canvas: Canvas, neon: Neon, u: Float, width: Float, height: Float)
 }
+
+/** [drops] counts every released block, landed or not; [durationMs] is active play time only. */
+data class RunStats(
+    val score: Int,
+    val durationMs: Long,
+    val drops: Int,
+    val perfects: Int,
+    val bestCombo: Int,
+    val revived: Boolean,
+)
 
 class ModeHost(
     val sound: SoundManager,

@@ -17,13 +17,19 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
         SOUND("Sound"),
         VIBRATION("Vibration"),
         REDUCE_MOTION("Reduce motion"),
+        PRIVACY_OPTIONS("Privacy options"),
         PRIVACY_POLICY("Privacy policy"),
         VERSION("Version"),
     }
 
-    private val rows = Row.entries
-    private val rects = List(rows.size) { RectF() }
+    private val allRows = Row.entries
+    private val withoutOptions = Row.entries.filter { it != Row.PRIVACY_OPTIONS }
+
+    /** Privacy options appear only where the consent rules require them. */
+    private val rows get() = if (game.privacyOptionsRequired) allRows else withoutOptions
+    private val rects = List(Row.entries.size) { RectF() }
     private val backButton = RectF()
+    private val veil = Paint()
 
     private var w = 0f
     private var h = 0f
@@ -50,15 +56,17 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
             game.backToMenu()
             return true
         }
+        val visible = rows
         val i = rects.indexOfFirst { it.contains(x, y) }
-        if (i < 0) return true
-        val row = rows[i]
+        if (i < 0 || i >= visible.size) return true
+        val row = visible[i]
         if (row == Row.VERSION) return true
         if (row == Row.VIBRATION) widgets.press(rects[i]) else game.press(rects[i])
         when (row) {
             Row.SOUND -> game.toggleSound()
             Row.VIBRATION -> game.toggleVibration()
             Row.REDUCE_MOTION -> game.toggleReduceMotion()
+            Row.PRIVACY_OPTIONS -> game.showPrivacyOptions()
             Row.PRIVACY_POLICY -> game.bridge.openUrl(Links.PRIVACY_POLICY)
             Row.VERSION -> Unit
         }
@@ -72,6 +80,9 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
 
     override fun draw(canvas: Canvas) {
         val accent = Palette.accent(game.theme)
+        veil.color = game.theme.panel
+        veil.alpha = VEIL
+        canvas.drawRect(0f, 0f, w, h, veil)
         neon.glowText(canvas, "SETTINGS", w / 2f, h * 0.11f, u * 10f, neon.textColor, accent)
 
         val radius = u * 3f
@@ -89,10 +100,10 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
                 Row.SOUND -> onOff(game.save.soundOn)
                 Row.VIBRATION -> onOff(game.save.vibrationOn)
                 Row.REDUCE_MOTION -> onOff(game.reduceMotion)
-                Row.PRIVACY_POLICY -> "OPEN"
+                Row.PRIVACY_OPTIONS, Row.PRIVACY_POLICY -> "OPEN"
                 Row.VERSION -> BuildConfig.VERSION_NAME
             }
-            val on = value == ON || row == Row.PRIVACY_POLICY
+            val on = value == ON || value == "OPEN"
             if (row == Row.VERSION) {
                 neon.text(canvas, value, r.right - u * 5f, baseline, u * 4f, neon.textColor, 170, Paint.Align.RIGHT)
             } else {
@@ -108,6 +119,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
     private fun onOff(v: Boolean) = if (v) ON else OFF
 
     private companion object {
+        const val VEIL = 170
         const val ON = "ON"
         const val OFF = "OFF"
     }

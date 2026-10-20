@@ -11,6 +11,7 @@ import com.stackdrop.game.game.GameMode
 import com.stackdrop.game.game.ModeHost
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.game.Particles
+import com.stackdrop.game.game.RunStats
 import com.stackdrop.game.game.Theme
 import com.stackdrop.game.game.perfectPitch
 import com.stackdrop.game.ui.Neon
@@ -62,6 +63,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         private set
     override val gemsEarned get() = perfects + score / 10
     override val isFinished get() = isOver && overTime > (if (collapsing) COLLAPSE_TIME else OVER_TIME)
+    override val runStats get() = RunStats(score, (playTime * 1000f).toLong(), drops, perfects, bestCombo, revived)
 
     private val floors = ArrayList<Floor>()
     private val tumbles = ArrayList<Tumble>()
@@ -115,6 +117,9 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private var lives = LIVES
     private var combo = 0
     private var perfects = 0
+    private var drops = 0
+    private var playTime = 0f
+    private var revived = false
     private var overTime = 0f
     private var clock = 0f
     private var damageFlash = 0f
@@ -148,6 +153,9 @@ class TowerMode(private val host: ModeHost) : GameMode {
         bestCombo = 0
         combo = 0
         perfects = 0
+        drops = 0
+        playTime = 0f
+        revived = false
         lives = LIVES
         isOver = false
         endReason = ""
@@ -208,7 +216,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
 
         particles.update(dt, w)
         camera.update(dt)
-        if (isOver) overTime += dt
+        if (isOver) overTime += dt else playTime += dt
         damageFlash = max(0f, damageFlash - dt * 2.2f)
     }
 
@@ -221,6 +229,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         fvx = rope * dTheta * cos(theta) * MOMENTUM
         fvy = rope * dTheta * sin(theta) * MOMENTUM
         hook = Hook.FALLING
+        drops++
         host.sound.play(SoundManager.RELEASE, 1f, 0.7f)
     }
 
@@ -335,6 +344,44 @@ class TowerMode(private val host: ModeHost) : GameMode {
         camera.targetZoom = (h * 0.5f / ((top + H * 3f) * scale)).coerceIn(MIN_ZOOM, 1f)
         camera.targetY = max(top * 0.5f, camMin * camera.targetZoom)
         camera.targetX = 0f
+    }
+
+    override fun canRevive() = isOver && !revived
+
+    /**
+     * After a collapse, the top two floors come off (more if the rest would still be about to tip)
+     * and the tower stands straight again. After the last slip, one life comes back.
+     */
+    override fun revive() {
+        if (!canRevive()) return
+        if (collapsing) {
+            repeat(min(2, floors.size)) { floors.removeAt(floors.lastIndex) }
+            while (floors.isNotEmpty() && abs(stability()) > DANGER) floors.removeAt(floors.lastIndex)
+            collapsing = false
+            collapseAngle = 0f
+            collapseV = 0f
+        } else {
+            lives = 1
+        }
+        score = floors.size
+        balance = stability()
+        leanTarget = sign(balance) * min(1f, abs(balance)).pow(1.5f)
+        lean = leanTarget
+        sway = 0f
+        swayV = 0f
+        combo = 0
+        damageFlash = 0f
+        isOver = false
+        endReason = ""
+        overTime = 0f
+        revived = true
+
+        val top = floors.size * H
+        camera.targetZoom = 1f
+        camera.targetY = max(camMin, top)
+        camera.targetX = (floors.lastOrNull()?.x ?: 0f) + leanTarget * shiftScale(top)
+        updateDifficulty()
+        spawn()
     }
 
     private fun spawn() {

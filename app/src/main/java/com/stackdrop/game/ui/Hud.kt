@@ -4,9 +4,12 @@ import android.graphics.Canvas
 import android.graphics.RectF
 import com.stackdrop.game.game.Game
 import com.stackdrop.game.game.Palette
+import com.stackdrop.game.ui.screens.FriendsScreen
 import com.stackdrop.game.ui.screens.GameOverScreen
+import com.stackdrop.game.ui.screens.LeaderboardScreen
 import com.stackdrop.game.ui.screens.MenuScreen
 import com.stackdrop.game.ui.screens.PlayingScreen
+import com.stackdrop.game.ui.screens.ProfileScreen
 import com.stackdrop.game.ui.screens.Screen
 import com.stackdrop.game.ui.screens.SettingsScreen
 import com.stackdrop.game.ui.screens.ThemesScreen
@@ -16,13 +19,17 @@ import kotlin.math.max
 class Hud(private val game: Game, private val neon: Neon) {
 
     val widgets = Widgets(neon)
+    private val avatars = Avatars()
 
-    private val menu = MenuScreen(game, neon, widgets)
+    private val menu = MenuScreen(game, neon, widgets, avatars)
+    private val profile = ProfileScreen(game, neon, widgets, avatars)
+    private val leaderboard = LeaderboardScreen(game, neon, widgets, avatars)
+    private val friendsScreen = FriendsScreen(game, neon, widgets, avatars)
     private val themes = ThemesScreen(game, neon, widgets)
     private val playing = PlayingScreen(game, this, neon, widgets)
     private val gameOver = GameOverScreen(game, neon, widgets)
     private val settings = SettingsScreen(game, neon, widgets)
-    private val screens = listOf(menu, themes, playing, gameOver, settings)
+    private val screens = listOf(menu, themes, playing, gameOver, settings, profile, leaderboard, friendsScreen)
 
     var scorePop = 0f
         private set
@@ -99,6 +106,9 @@ class Hud(private val game: Game, private val neon: Neon) {
         Game.State.PLAYING -> playing
         Game.State.GAME_OVER -> gameOver
         Game.State.SETTINGS -> settings
+        Game.State.PROFILE -> profile
+        Game.State.LEADERBOARD -> leaderboard
+        Game.State.FRIENDS -> friendsScreen
         else -> null
     }
 

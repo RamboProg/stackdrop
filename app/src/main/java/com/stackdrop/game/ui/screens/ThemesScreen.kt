@@ -18,7 +18,9 @@ class ThemesScreen(private val game: Game, private val neon: Neon, private val w
 
     override val tapsOnUp = true
 
-    private val backButton = RectF()
+    private val backCentered = RectF()
+    private val backLeft = RectF()
+    private val freeGemsButton = RectF()
     private val tabRects = List(2) { RectF() }
     private val row = RectF()
     private val swatch = RectF()
@@ -54,9 +56,14 @@ class ThemesScreen(private val game: Game, private val neon: Neon, private val w
         tabRects[1].set(u * 51f, tabTop, u * 80f, tabTop + u * 7.5f)
 
         val bottom = h * 0.88f
-        backButton.set(u * 30f, bottom, u * 70f, bottom + u * 11f)
+        backCentered.set(u * 30f, bottom, u * 70f, bottom + u * 11f)
+        backLeft.set(u * 8f, bottom, u * 48f, bottom + u * 11f)
+        freeGemsButton.set(u * 52f, bottom, u * 92f, bottom + u * 11f)
         scroll = scroll.coerceIn(0f, maxScroll())
     }
+
+    /** BACK moves aside for the "▶ +25" rewarded pill whenever a free-gems ad is available. */
+    private val backButton get() = if (game.canGetFreeGems) backLeft else backCentered
 
     override fun onEnter() {
         family = Family.CALM
@@ -68,8 +75,14 @@ class ThemesScreen(private val game: Game, private val neon: Neon, private val w
     }
 
     override fun onTap(x: Float, y: Float): Boolean {
-        if (backButton.contains(x, y)) {
-            game.press(backButton)
+        if (game.canGetFreeGems && freeGemsButton.contains(x, y)) {
+            game.press(freeGemsButton)
+            game.watchForFreeGems()
+            return true
+        }
+        val back = backButton
+        if (back.contains(x, y)) {
+            game.press(back)
             game.closeThemes()
             return true
         }
@@ -121,6 +134,7 @@ class ThemesScreen(private val game: Game, private val neon: Neon, private val w
         canvas.restore()
 
         widgets.pill(canvas, backButton, "BACK", accent)
+        if (game.canGetFreeGems) widgets.pill(canvas, freeGemsButton, "▶ +25", Palette.accent2(theme), highlight = true)
     }
 
     private fun drawRow(canvas: Canvas, t: Theme) {

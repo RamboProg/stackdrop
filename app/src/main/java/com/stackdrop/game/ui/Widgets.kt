@@ -139,6 +139,14 @@ class Widgets(private val neon: Neon) {
         neon.text(canvas, label, box.centerX(), cy + size * 0.36f, size, DARK)
     }
 
+    /** A soft loading arc turning about once a second. */
+    fun spinner(canvas: Canvas, cx: Float, cy: Float, r: Float, color: Int, time: Float) {
+        box.set(cx - r, cy - r, cx + r, cy + r)
+        icon.reset()
+        icon.addArc(box, (time * 360f) % 360f, 270f)
+        neon.path(canvas, icon, color, u * 0.5f, 200)
+    }
+
     /** Segmented tabs; the selected one is filled. */
     fun tabs(canvas: Canvas, rects: List<RectF>, labels: Array<String>, selected: Int, color: Int) {
         for (i in rects.indices) pill(canvas, rects[i], labels[i], color, highlight = i == selected, dim = i != selected)
@@ -147,8 +155,13 @@ class Widgets(private val neon: Neon) {
     /** Centered message capsule; [fade] runs from 0 (gone) to 1 (fully shown). */
     fun banner(canvas: Canvas, message: String, fade: Float, accent: Int) {
         val a = min(1f, fade)
-        val size = u * 4.6f
-        val tw = neon.measure(message, size)
+        var size = u * 4.6f
+        var tw = neon.measure(message, size)
+        val room = w - u * 16f
+        if (tw > room) {
+            size *= room / tw
+            tw = room
+        }
         val cy = h * 0.53f
         bannerRect.set(w / 2f - tw / 2f - u * 6f, cy - u * 6f, w / 2f + tw / 2f + u * 6f, cy + u * 6f)
         neon.panel(canvas, bannerRect, u * 6f, (200 * a).toInt())

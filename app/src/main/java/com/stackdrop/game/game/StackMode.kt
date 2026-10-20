@@ -23,6 +23,7 @@ class StackMode(private val host: ModeHost) : GameMode {
         private set
     override val gemsEarned get() = perfects + score / 10
     override val isFinished get() = isOver && overTime > FALL_TIME
+    override val runStats get() = RunStats(score, (playTime * 1000f).toLong(), drops, perfects, bestCombo, revived)
 
     private val iso = IsoRenderer()
     private val camera = Camera()
@@ -38,6 +39,9 @@ class StackMode(private val host: ModeHost) : GameMode {
 
     private var combo = 0
     private var perfects = 0
+    private var drops = 0
+    private var playTime = 0f
+    private var revived = false
     private var overTime = 0f
     private var drift = 0f
 
@@ -62,6 +66,9 @@ class StackMode(private val host: ModeHost) : GameMode {
         combo = 0
         bestCombo = 0
         perfects = 0
+        drops = 0
+        playTime = 0f
+        revived = false
         overTime = 0f
         isOver = false
         speed = START_SPEED
@@ -77,7 +84,12 @@ class StackMode(private val host: ModeHost) : GameMode {
     }
 
     override fun update(dt: Float) {
-        if (isOver) overTime += dt else moveSlab(dt)
+        if (isOver) {
+            overTime += dt
+        } else {
+            playTime += dt
+            moveSlab(dt)
+        }
 
         val it = debris.iterator()
         while (it.hasNext()) {
@@ -95,6 +107,21 @@ class StackMode(private val host: ModeHost) : GameMode {
 
     override fun onTap() {
         if (!isOver) drop()
+    }
+
+    override fun canRevive() = isOver && !revived
+
+    /** A fresh slab at the width of the last placed one; the missed slab keeps falling away. */
+    override fun revive() {
+        if (!canRevive()) return
+        isOver = false
+        overTime = 0f
+        revived = true
+        combo = 0
+        val top = tower.last()
+        camera.targetZoom = 1f
+        camera.targetY = top.y + top.h + SLAB_H
+        spawnNext()
     }
 
     private fun moveSlab(dt: Float) {
@@ -123,6 +150,7 @@ class StackMode(private val host: ModeHost) : GameMode {
 
     private fun drop() {
         val b = moving ?: return
+        drops++
         val top = tower.last()
         val delta = if (axisX) b.x - top.x else b.z - top.z
         val size = if (axisX) top.w else top.d
