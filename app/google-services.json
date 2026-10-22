@@ -41,6 +41,43 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:203689089958:android:51a55e028c4bbebf1bcd67",
+        "android_client_info": {
+          "package_name": "com.stackdrop.towers"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "203689089958-9octtrvml4hk9efp4ludsaqn942mk8gc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stackdrop.towers",
+            "certificate_hash": "e5066814e56cbdae8e3fe35fcf5e5b92a59abfe2"
+          }
+        },
+        {
+          "client_id": "203689089958-psohlfhnmqcr318gdecr4sm54isensue.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJy9QErf1BlFSW_eFrOVl6KpeHyrz1PFg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "203689089958-psohlfhnmqcr318gdecr4sm54isensue.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

@@ -7,7 +7,7 @@ builds and plays fully offline; nothing online happens.
 
 1. Open the [Firebase console](https://console.firebase.google.com) → **Add project** → name it **Stack Drop**.
    Google Analytics is optional; you can leave it off.
-2. In the project, click the **Android** icon to add an app. Package name: `com.stackdrop.game`.
+2. In the project, click the **Android** icon to add an app. Package name: `com.stackdrop.towers` (the Play ID; `com.stackdrop.game` was taken).
 3. Fingerprints (needed for Google sign-in in Phase 3, harmless to add now). See
    [Fingerprints](#fingerprints) below for the full steps.
 
@@ -329,7 +329,7 @@ internet connection while building), so the dashboard shows the original names.
 2. With the game open, force a crash from a terminal. Use the process ID, not the package name
    (the package name also matches the ad's web process):
    ```
-   adb shell am crash $(adb shell pidof com.stackdrop.game)
+   adb shell am crash $(adb shell pidof com.stackdrop.towers)
    ```
 3. Open the game again (reports are sent on the next launch). The crash
    `CrashedByAdbException: shell-induced crash` appears in Crashlytics within a few minutes.

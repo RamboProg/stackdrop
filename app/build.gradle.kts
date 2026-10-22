@@ -37,7 +37,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.stackdrop.game"
+        // Play listing ID (com.stackdrop.game was already taken on Play). Code stays in the
+        // com.stackdrop.game namespace; only the installed app's ID differs.
+        applicationId = "com.stackdrop.towers"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
