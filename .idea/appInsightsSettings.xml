@@ -8,8 +8,8 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.stackdrop.game" />
-                  <option name="mobileSdkAppId" value="1:203689089958:android:8e09042ef9a0a5b81bcd67" />
+                  <option name="appId" value="com.stackdrop.towers" />
+                  <option name="mobileSdkAppId" value="1:203689089958:android:51a55e028c4bbebf1bcd67" />
                   <option name="projectId" value="stackdrop-f080b" />
                   <option name="projectNumber" value="203689089958" />
                 </ConnectionSetting>
