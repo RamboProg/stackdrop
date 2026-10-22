@@ -6,8 +6,8 @@ updates it.
 
 ## Before you submit
 
-- [ ] Privacy policy hosted (draft: `docs/store/privacy-policy.md`) and its URL in `ui/Links.kt`
-- [ ] Account deletion page hosted (draft: `docs/store/account-deletion.md`) and its URL in `ui/Links.kt`
+- [x] Privacy policy hosted at <https://stackdrop-towers.vercel.app/privacy> (source: `site/`)
+- [x] Account deletion page hosted at <https://stackdrop-towers.vercel.app/delete-account>
 - [ ] Real AdMob IDs in `gradle.properties`: `stackdrop.admobAppId`, `stackdrop.admobBannerId`,
       `stackdrop.admobRewardedId`, `stackdrop.admobInterstitialId` (without them release builds show
       test ads and earn nothing)

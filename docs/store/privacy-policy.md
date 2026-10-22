@@ -1,11 +1,10 @@
 # Stack Drop — Privacy Policy
 
-*Draft prepared from what the app actually does. Fill in the bracketed parts, have it reviewed,
-then host it (GitHub Pages or a Google Site is fine) and put its address in `Links.PRIVACY_POLICY`.
-This is not legal advice.*
+*Published at <https://stackdrop-towers.vercel.app/privacy> from `site/privacy/index.html`; keep
+both in sync when the policy changes. This is not legal advice.*
 
-**Last updated:** [date]
-**Developer:** [your name or studio], [contact email]
+**Last updated:** 22 October 2026
+**Developer:** GrabStacks Studio, stackdrop.game@gmail.com
 
 ## What Stack Drop collects
 
@@ -51,7 +50,9 @@ Your data is kept while your account exists. You can delete it at any time:
 - **In the game:** Profile → **Delete account**. This immediately and permanently deletes your
   profile, name, friend code, friendships, friend requests, leaderboard entries, saved progress and
   account, and resets the game on your phone (your sound and motion settings are kept).
-- **Without the app:** follow the steps at [account-deletion page URL].
+- **Without the app:** follow the steps at <https://stackdrop-towers.vercel.app/delete-account>.
+
+Crash reports are not linked to your account and are deleted automatically after 90 days.
 
 Uninstalling the game removes the data stored on your phone, but not your online account; use
 one of the options above for that.
@@ -73,4 +74,4 @@ If this policy changes, the new version will be posted here with a new date.
 
 ## Contact
 
-[contact email]
+stackdrop.game@gmail.com
