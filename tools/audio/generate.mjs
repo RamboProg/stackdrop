@@ -61,6 +61,47 @@ function hiss(out, start, length, amp, cutoffAt, decay) {
   }
 }
 
+/**
+ * A rounder chime than [bell]: a slower attack, only a faint octave overtone and a quiet sub-octave
+ * for warmth, so it reads as a soft mallet on wood rather than a ping.
+ */
+function chime(out, start, freq, length, amp, decay = 4) {
+  const s0 = Math.floor(start * RATE);
+  const n = Math.floor(length * RATE);
+  for (let i = 0; i < n && s0 + i < out.length; i++) {
+    const t = i / RATE;
+    const attack = Math.min(1, t / 0.014);
+    const env = attack * attack * Math.exp(-decay * t);
+    const v = Math.sin(TAU * freq * t) + 0.08 * Math.sin(TAU * freq * 2 * t) * Math.exp(-8 * t) +
+      0.18 * Math.sin(TAU * freq * 0.5 * t);
+    out[s0 + i] += amp * env * v;
+  }
+}
+
+/**
+ * A soft breath of air: noise through two low-pass stages with a swell-and-fade envelope. It has
+ * its own noise source so changing it never changes the other generated sounds.
+ */
+function whoosh(out, start, length, amp, cutoffAt) {
+  let s = 777;
+  const rnd = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return (s / 0x3fffffff) - 1;
+  };
+  const s0 = Math.floor(start * RATE);
+  const n = Math.floor(length * RATE);
+  let lp1 = 0;
+  let lp2 = 0;
+  for (let i = 0; i < n && s0 + i < out.length; i++) {
+    const p = i / n;
+    const a = Math.min(1, cutoffAt(p) / RATE * TAU);
+    lp1 += a * (rnd() - lp1);
+    lp2 += a * (lp1 - lp2);
+    const env = Math.sin(Math.PI * Math.min(1, p * 1.6)) ** 2 * (1 - p);
+    out[s0 + i] += amp * env * lp2;
+  }
+}
+
 function normalize(buf, peak) {
   let max = 0;
   for (const v of buf) max = Math.max(max, Math.abs(v));
@@ -117,18 +158,21 @@ const effects = {
     hiss(b, 0, 0.12, 0.35, () => 900, 40);
     return normalize(b, 0.7);
   },
-  // Perfect drop: a clear chime. Combos raise its pitch through SoundPool's rate.
+  // Perfect drop: a warm, rounded chime (E5) with a faint major third ringing under it. Combos
+  // raise its pitch through SoundPool's rate, so it starts low enough to stay soft at the top.
   perfect() {
-    const b = buffer(0.9);
-    bell(b, 0, midi(84), 0.9, 1, 5);
-    bell(b, 0.004, midi(91), 0.6, 0.25, 7);
-    return normalize(b, 0.6);
+    const b = buffer(1.1);
+    chime(b, 0, midi(76), 1.1, 1, 3.5);
+    chime(b, 0.03, midi(80), 0.9, 0.18, 4.5);
+    return normalize(b, 0.42);
   },
-  // Overhang cut off: a soft airy swish.
+  // Overhang cut off: a short, low breath of air that swells and settles, with no bright edge.
   slice() {
-    const b = buffer(0.28);
-    hiss(b, 0, 0.27, 1, (p) => 600 + 3400 * p, 9);
-    return normalize(b, 0.5);
+    const b = buffer(0.32);
+    whoosh(b, 0, 0.32, 1, (p) => 1300 - 800 * p);
+    // The previous swish drew this much shared noise; keep drawing it so later sounds don't change.
+    for (let i = 0; i < Math.floor(0.27 * RATE); i++) noise();
+    return normalize(b, 0.34);
   },
   // Missed or slipped: a gentle falling two-note sigh, never a buzzer.
   fail() {
