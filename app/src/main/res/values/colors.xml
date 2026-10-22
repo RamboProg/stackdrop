@@ -2,4 +2,6 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- The studio splash background (GrabStacks navy); also the launcher icon's ground. -->
+    <color name="splash_navy">#FF1E2140</color>
 </resources>

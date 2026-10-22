@@ -1,0 +1,9 @@
+<resources>
+    <!-- Android 12+ always shows a system splash. Keep it a plain navy screen with no icon, so the
+         game's animated studio splash (StudioSplash.kt) continues it without a jump. -->
+    <style name="Theme.StackDrop" parent="Base.Theme.StackDrop">
+        <item name="android:windowSplashScreenBackground">@color/splash_navy</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_navy</item>
+    </style>
+</resources>

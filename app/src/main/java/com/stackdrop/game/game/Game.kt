@@ -37,6 +37,7 @@ import com.stackdrop.game.platform.TextPrompt
 import com.stackdrop.game.ui.Avatars
 import com.stackdrop.game.ui.Hud
 import com.stackdrop.game.ui.Neon
+import com.stackdrop.game.ui.StudioSplash
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
@@ -163,11 +164,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private var fadeCanvas: Canvas? = null
     private val fadeDst = RectF()
     private val crossPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    /** Plays once per launch over the menu; Reduce motion skips it. */
+    private val splash = StudioSplash(context.assets)
 
     init {
         sound.muted = !save.soundOn
         haptics.enabled = save.vibrationOn
         applyComfort()
+        if (reduceMotion) splash.finish()
         modes = listOf(StackMode(host), TowerMode(host))
         mode = modes.firstOrNull { it.id == save.lastMode } ?: modes[0]
         refreshFreeToday()
@@ -234,9 +238,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         confetti.update(dt, width.toFloat())
         hud.update(dt)
         sound.update(dt)
+        splash.update(dt)
     }
 
     private fun handleTouch(action: Int, x: Float, y: Float) {
+        if (splash.active) {
+            if (action == TouchQueue.DOWN) splash.skip()
+            return
+        }
         // A tap meant for the ad's close button must not drop a block.
         if (adShowing || time - adClosedAt < AD_TAP_GUARD) return
         when (action) {
@@ -255,7 +264,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     private fun handleEvent(event: GameEvent) {
         when (event) {
-            GameEvent.Back -> if (!hud.onBack()) backToMenu()
+            GameEvent.Back -> if (splash.active) splash.skip() else if (!hud.onBack()) backToMenu()
             is GameEvent.Toast -> hud.showBanner(event.message)
             is GameEvent.AuthChanged -> account = event.account
             is GameEvent.CloudLoaded -> applyCloud(event.remote)
@@ -933,6 +942,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
             fadePaint.alpha = (255 * fade * fade).toInt()
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fadePaint)
         }
+        splash.render(canvas, width.toFloat(), height.toFloat())
     }
 
     @SuppressLint("DiscouragedApi")

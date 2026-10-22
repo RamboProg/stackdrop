@@ -2,5 +2,5 @@
 <!-- Android 7.x has no adaptive icons; there the premium icon is the two layers stacked. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@drawable/ic_launcher_premium_background" />
-    <item android:drawable="@drawable/ic_launcher_premium_foreground" />
+    <item android:drawable="@mipmap/ic_launcher_premium_foreground" />
 </layer-list>
