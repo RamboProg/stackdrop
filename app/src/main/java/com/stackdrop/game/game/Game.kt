@@ -169,6 +169,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     init {
         sound.muted = !save.soundOn
+        sound.setLevel(save.soundLevel)
         haptics.enabled = save.vibrationOn
         applyComfort()
         if (reduceMotion) splash.finish()
@@ -534,6 +535,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private fun refreshFromSave() {
         val wasMuted = sound.muted
         sound.muted = !save.soundOn
+        sound.setLevel(save.soundLevel)
         if (wasMuted && !sound.muted) sound.resumeMusic()
         if (!wasMuted && sound.muted) sound.pauseMusic()
         haptics.enabled = save.vibrationOn
@@ -776,17 +778,22 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         syncSoon()
     }
 
-    fun toggleSound() {
-        save.soundOn = !save.soundOn
+    /** Picks a volume step from the Settings bar; 0 is off. Plays a tick at the new loudness. */
+    fun setSoundLevel(level: Int) {
+        val wasOn = save.soundOn
+        save.soundLevel = level
+        sound.setLevel(save.soundLevel)
         sound.muted = !save.soundOn
-        if (save.soundOn) {
-            sound.resumeMusic()
-            sound.play(SoundManager.BUTTON)
-        } else {
-            sound.pauseMusic()
+        when {
+            save.soundOn && !wasOn -> sound.resumeMusic()
+            !save.soundOn && wasOn -> sound.pauseMusic()
         }
-        syncSoon()
+        sound.play(SoundManager.BUTTON)
+        if (save.soundOn != wasOn) syncSoon()
     }
+
+    /** Mutes, or unmutes back to the step the player had before. */
+    fun toggleSound() = setSoundLevel(if (save.soundOn) 0 else save.lastSoundLevel)
 
     fun toggleReduceMotion() {
         save.reduceMotion = !save.reduceMotion

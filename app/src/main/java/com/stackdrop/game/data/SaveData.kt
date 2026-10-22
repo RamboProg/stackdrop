@@ -3,6 +3,7 @@ package com.stackdrop.game.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.stackdrop.game.audio.SoundManager
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.game.ThemeRules
 import java.util.TimeZone
@@ -53,6 +54,22 @@ class SaveData(context: Context) {
     var soundOn: Boolean
         get() = prefs.getBoolean(KEY_SOUND, true)
         set(v) = change { putBoolean(KEY_SOUND, v) }
+
+    /**
+     * Volume step from 0 (off) to [SoundManager.MAX_LEVEL]. Only on/off is synced (as [soundOn]); the step
+     * itself stays on this phone, and muting keeps it so unmuting returns to the same loudness.
+     */
+    var soundLevel: Int
+        get() = if (!soundOn) 0 else lastSoundLevel
+        set(v) {
+            val level = v.coerceIn(0, SoundManager.MAX_LEVEL)
+            if (level > 0) prefs.edit { putInt(KEY_SOUND_LEVEL, level) }
+            if (soundOn != level > 0) soundOn = level > 0
+        }
+
+    /** The level unmuting returns to. */
+    val lastSoundLevel: Int
+        get() = prefs.getInt(KEY_SOUND_LEVEL, SoundManager.DEFAULT_LEVEL).coerceIn(1, SoundManager.MAX_LEVEL)
 
     var vibrationOn: Boolean
         get() = prefs.getBoolean(KEY_VIBRATION, true)
@@ -181,6 +198,7 @@ class SaveData(context: Context) {
     /** After account deletion: a fresh install's save, keeping only the player's settings. */
     fun resetKeepingSettings() {
         val sound = soundOn
+        val level = lastSoundLevel
         val vibration = vibrationOn
         val reduce = reduceMotion
         // Premium was bought through Google Play, not the game account, so it survives too.
@@ -189,6 +207,7 @@ class SaveData(context: Context) {
             clear()
             putBoolean(KEY_PREMIUM, owned)
             putBoolean(KEY_SOUND, sound)
+            putInt(KEY_SOUND_LEVEL, level)
             putBoolean(KEY_VIBRATION, vibration)
             putBoolean(KEY_REDUCE_MOTION, reduce)
             putString(KEY_THEME, Palette.NEW_PLAYER_ID)
@@ -230,6 +249,8 @@ class SaveData(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_MODE = "mode"
         const val KEY_SOUND = "sound"
+        /** Local only, like the avatar: the cloud keeps just [KEY_SOUND]. */
+        const val KEY_SOUND_LEVEL = "sound_level"
         const val KEY_VIBRATION = "vibration"
         const val KEY_STREAK = "streak"
         const val KEY_UNLOCKED = "unlocked"

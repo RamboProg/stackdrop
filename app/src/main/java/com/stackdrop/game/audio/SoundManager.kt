@@ -14,6 +14,11 @@ class SoundManager(context: Context) {
     @Volatile
     var muted = false
 
+    /** Loudness of the chosen volume step, 0..1; applied to effects, music and ambience. */
+    @Volatile
+    var gain = LEVEL_GAIN[DEFAULT_LEVEL]
+        private set
+
     /** Effects stay silent while a full-screen ad is up, whatever the sound setting. */
     @Volatile
     var suppressed = false
@@ -51,7 +56,7 @@ class SoundManager(context: Context) {
         if (musicRes != 0) {
             music = MediaPlayer.create(appContext, musicRes)?.apply {
                 isLooping = true
-                setVolume(MUSIC_VOLUME, MUSIC_VOLUME)
+                setVolume(MUSIC_VOLUME * gain, MUSIC_VOLUME * gain)
             }
         }
     }
@@ -59,7 +64,17 @@ class SoundManager(context: Context) {
     fun play(name: String, rate: Float = 1f, volume: Float = 1f) {
         if (muted || suppressed) return
         val id = ids[name] ?: return
-        pool.play(id, volume, volume, 1, 0, rate.coerceIn(0.5f, 2f))
+        val v = volume * gain * EFFECT_CEILING
+        pool.play(id, v, v, 1, 0, rate.coerceIn(0.5f, 2f))
+    }
+
+    /** Sets the volume step (0 = off, up to [MAX_LEVEL]); music and ambience follow at once. */
+    @Synchronized
+    fun setLevel(level: Int) {
+        gain = LEVEL_GAIN[level.coerceIn(0, MAX_LEVEL)]
+        music?.setVolume(MUSIC_VOLUME * gain, MUSIC_VOLUME * gain)
+        ambient?.setVolume(ambientVolume * gain, ambientVolume * gain)
+        fading?.setVolume(fadingVolume * gain, fadingVolume * gain)
     }
 
     @Synchronized
@@ -105,7 +120,7 @@ class SoundManager(context: Context) {
         ambient?.let {
             if (ambientVolume < AMBIENT_VOLUME) {
                 ambientVolume = min(AMBIENT_VOLUME, ambientVolume + step)
-                it.setVolume(ambientVolume, ambientVolume)
+                it.setVolume(ambientVolume * gain, ambientVolume * gain)
             }
         }
         fading?.let {
@@ -114,7 +129,7 @@ class SoundManager(context: Context) {
                 it.release()
                 fading = null
             } else {
-                it.setVolume(fadingVolume, fadingVolume)
+                it.setVolume(fadingVolume * gain, fadingVolume * gain)
             }
         }
     }
@@ -143,6 +158,16 @@ class SoundManager(context: Context) {
         const val UNLOCK = "unlock"
         const val RELEASE = "release"
         const val WARN = "warn"
+        /** Volume steps in Settings; 0 is off. */
+        const val MAX_LEVEL = 5
+        const val DEFAULT_LEVEL = 4
+        /**
+         * Gain per step, spaced by loudness rather than linearly (about 6 dB apart), so every step
+         * sounds like an even change.
+         */
+        private val LEVEL_GAIN = floatArrayOf(0f, 0.12f, 0.22f, 0.4f, 0.65f, 1f)
+        /** Effects never play louder than this, even at the top step, to keep the game calm. */
+        private const val EFFECT_CEILING = 0.6f
         private const val MUSIC = "music"
         private const val MUSIC_VOLUME = 0.35f
         private const val AMBIENT_PREFIX = "ambient_"

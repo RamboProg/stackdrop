@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import com.stackdrop.game.BuildConfig
+import com.stackdrop.game.audio.SoundManager
 import com.stackdrop.game.game.Game
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.ui.Links
@@ -31,6 +32,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
     private val rows get() = if (game.privacyOptionsRequired) allRows else withoutOptions
     private val rects = List(Row.entries.size) { RectF() }
     private val backButton = RectF()
+    private val segment = RectF()
     private val veil = Paint()
 
     private var w = 0f
@@ -66,7 +68,7 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
         if (row == Row.VIBRATION) widgets.press(rects[i]) else game.press(rects[i])
         when (row) {
             Row.PREMIUM -> game.buyPremium()
-            Row.SOUND -> game.toggleSound()
+            Row.SOUND -> tapSound(rects[i], x)
             Row.VIBRATION -> game.toggleVibration()
             Row.REDUCE_MOTION -> game.toggleReduceMotion()
             Row.PRIVACY_OPTIONS -> game.showPrivacyOptions()
@@ -110,14 +112,16 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
             }
             val value = when (row) {
                 Row.PREMIUM -> if (game.premium) "ACTIVE" else game.premiumPrice ?: "GET"
-                Row.SOUND -> onOff(game.save.soundOn)
+                Row.SOUND -> ""
                 Row.VIBRATION -> onOff(game.save.vibrationOn)
                 Row.REDUCE_MOTION -> onOff(game.reduceMotion)
                 Row.PRIVACY_OPTIONS, Row.PRIVACY_POLICY, Row.DATA_DELETION -> "OPEN"
                 Row.VERSION -> BuildConfig.VERSION_NAME
             }
             val on = value == ON || value == "OPEN" || row == Row.PREMIUM
-            if (row == Row.VERSION) {
+            if (row == Row.SOUND) {
+                drawVolume(canvas, r, accent)
+            } else if (row == Row.VERSION) {
                 neon.text(canvas, value, r.right - u * 5f, baseline, u * 4f, neon.textColor, 170, Paint.Align.RIGHT)
             } else {
                 neon.glowText(canvas, value, r.right - u * 5f, baseline, u * 4f, if (on) accent else neon.textColor, accent,
@@ -131,10 +135,51 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
 
     private fun onOff(v: Boolean) = if (v) ON else OFF
 
+    /** Tapping a bar picks that step; tapping the quietest one again, or the label, mutes. */
+    private fun tapSound(r: RectF, x: Float) {
+        val left = volumeLeft(r)
+        if (x < left - u * 2f) {
+            game.toggleSound()
+            return
+        }
+        val step = ((x - left) / (SEGMENT_W + SEGMENT_GAP) / u).toInt().coerceIn(0, SoundManager.MAX_LEVEL - 1) + 1
+        val level = game.save.soundLevel
+        game.setSoundLevel(if (step == 1 && level == 1) 0 else step)
+    }
+
+    /** Rising bars, one per volume step, filled up to the current step; OFF beside them when muted. */
+    private fun drawVolume(canvas: Canvas, r: RectF, accent: Int) {
+        val level = game.save.soundLevel
+        val left = volumeLeft(r)
+        val tallest = r.height() * 0.46f
+        val bottom = r.centerY() + tallest / 2f
+        for (i in 0 until SoundManager.MAX_LEVEL) {
+            val x = left + i * (SEGMENT_W + SEGMENT_GAP) * u
+            val h = tallest * (0.4f + 0.6f * i / (SoundManager.MAX_LEVEL - 1))
+            segment.set(x, bottom - h, x + SEGMENT_W * u, bottom)
+            if (i < level) {
+                neon.roundRect(canvas, segment, u * 0.8f, accent, u * 0.3f, 255, fillAlpha = 230)
+            } else {
+                neon.roundRect(canvas, segment, u * 0.8f, game.theme.textDim, u * 0.3f, 130)
+            }
+        }
+        if (level == 0) {
+            neon.text(canvas, OFF, left - u * 3f, r.centerY() + u * 1.6f, u * 4f, neon.textColor, 150, Paint.Align.RIGHT)
+        }
+    }
+
+    private fun volumeLeft(r: RectF): Float {
+        val n = SoundManager.MAX_LEVEL
+        return r.right - u * 5f - (n * SEGMENT_W + (n - 1) * SEGMENT_GAP) * u
+    }
+
     private companion object {
         const val VEIL = 170
         const val PREMIUM_PERKS = "No ads · 2× gems · Gilded theme"
         const val ON = "ON"
         const val OFF = "OFF"
+        /** Volume bar sizes, in u. */
+        const val SEGMENT_W = 4.2f
+        const val SEGMENT_GAP = 1.6f
     }
 }
