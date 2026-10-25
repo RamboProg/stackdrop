@@ -16,6 +16,8 @@ class ConsentManager(private val activity: Activity) {
 
     private val info = UserMessagingPlatform.getConsentInformation(activity)
 
+    val canRequestAds: Boolean get() = info.canRequestAds()
+
     val privacyOptionsRequired: Boolean
         get() = info.privacyOptionsRequirementStatus == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
 

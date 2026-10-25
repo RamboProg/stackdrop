@@ -20,6 +20,9 @@ interface PlatformBridge {
     fun maybeShowInterstitial()
     fun showPrivacyOptions()
 
+    /** Mutes ad audio when the game's sound is off. */
+    fun setAdsMuted(muted: Boolean)
+
     /** Opens Google Play's purchase sheet for premium; the result arrives as PremiumChanged. */
     fun buyPremium()
 

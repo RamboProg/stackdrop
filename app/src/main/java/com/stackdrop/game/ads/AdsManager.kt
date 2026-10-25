@@ -37,6 +37,10 @@ class AdsManager(private val activity: Activity) {
     private val started = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
 
+    /** Set when the activity is destroyed; late load callbacks then drop their ad and stop retrying. */
+    @Volatile private var released = false
+    private val appContext = activity.applicationContext
+
     @Volatile private var rewarded: RewardedAd? = null
     @Volatile private var rewardedAt = 0L
     @Volatile private var interstitial: InterstitialAd? = null
@@ -52,19 +56,38 @@ class AdsManager(private val activity: Activity) {
     private var sdkReady = false
 
     /** Premium players get no banner and no interstitials; rewarded ads stay available as an option. */
+    @Volatile
     var premium = false
         set(value) {
             field = value
-            handler.post { if (value) removeBanner() else loadBanner() }
+            handler.post {
+                if (value) {
+                    removeBanner()
+                    interstitial = null
+                } else {
+                    loadBanner()
+                    loadInterstitial()
+                }
+            }
+        }
+
+    /** Ad sound follows the game: none when the player turned sound off. */
+    @Volatile
+    var muted = false
+        set(value) {
+            field = value
+            handler.post { if (sdkReady) MobileAds.setAppMuted(value) }
         }
 
     /** Called once consent allows ads. The SDK is initialized off the UI thread. */
     fun start() {
         if (!started.compareAndSet(false, true)) return
         Thread {
-            MobileAds.initialize(activity.applicationContext) {
+            MobileAds.initialize(appContext) {
                 handler.post {
+                    if (released) return@post
                     sdkReady = true
+                    MobileAds.setAppMuted(muted)
                     loadRewarded()
                     loadInterstitial()
                     loadBanner()
@@ -94,7 +117,7 @@ class AdsManager(private val activity: Activity) {
 
     private fun loadBanner() {
         val slot = bannerSlot ?: return
-        if (!sdkReady || premium || banner != null) return
+        if (released || !sdkReady || premium || banner != null) return
         slot.visibility = View.VISIBLE
         val view = AdView(activity).apply {
             setAdSize(bannerSize())
@@ -130,7 +153,7 @@ class AdsManager(private val activity: Activity) {
             loadRewarded()
             return@post
         }
-        ad.fullScreenContentCallback = closedCallback(placement) { loadRewarded() }
+        ad.fullScreenContentCallback = fullScreenCallback(placement) { loadRewarded() }
         ad.show(activity) { events(GameEvent.RewardEarned(placement)) }
     }
 
@@ -142,11 +165,15 @@ class AdsManager(private val activity: Activity) {
             loadInterstitial()
             return@post
         }
-        ad.fullScreenContentCallback = closedCallback(null) { loadInterstitial() }
+        ad.fullScreenContentCallback = fullScreenCallback(null) { loadInterstitial() }
         ad.show(activity)
     }
 
-    private fun closedCallback(placement: RewardPlacement?, reload: () -> Unit) = object : FullScreenContentCallback() {
+    private fun fullScreenCallback(placement: RewardPlacement?, reload: () -> Unit) = object : FullScreenContentCallback() {
+        override fun onAdShowedFullScreenContent() {
+            events(GameEvent.AdShown(placement))
+        }
+
         override fun onAdDismissedFullScreenContent() {
             events(GameEvent.AdClosed(placement))
             reload()
@@ -160,12 +187,13 @@ class AdsManager(private val activity: Activity) {
     }
 
     private fun loadRewarded() {
-        if (!started.get() || loadingRewarded || (rewarded != null && fresh(rewardedAt))) return
+        if (released || !started.get() || loadingRewarded || (rewarded != null && fresh(rewardedAt))) return
         loadingRewarded = true
-        RewardedAd.load(activity, BuildConfig.AD_REWARDED_ID, AdRequest.Builder().build(),
+        RewardedAd.load(appContext, BuildConfig.AD_REWARDED_ID, AdRequest.Builder().build(),
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     loadingRewarded = false
+                    if (released) return
                     rewarded = ad
                     rewardedAt = System.currentTimeMillis()
                     scheduleRefresh { loadRewarded() }
@@ -174,18 +202,21 @@ class AdsManager(private val activity: Activity) {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loadingRewarded = false
                     Log.i(TAG, "Rewarded ad not loaded: ${error.code} ${error.message}")
-                    handler.postDelayed({ loadRewarded() }, RETRY_MS)
+                    if (!released) handler.postDelayed({ loadRewarded() }, RETRY_MS)
                 }
             })
     }
 
     private fun loadInterstitial() {
-        if (!started.get() || loadingInterstitial || (interstitial != null && fresh(interstitialAt))) return
+        // Premium players never see interstitials, so none is loaded for them.
+        if (released || premium || !started.get() || loadingInterstitial) return
+        if (interstitial != null && fresh(interstitialAt)) return
         loadingInterstitial = true
-        InterstitialAd.load(activity, BuildConfig.AD_INTERSTITIAL_ID, AdRequest.Builder().build(),
+        InterstitialAd.load(appContext, BuildConfig.AD_INTERSTITIAL_ID, AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     loadingInterstitial = false
+                    if (released) return
                     interstitial = ad
                     interstitialAt = System.currentTimeMillis()
                     scheduleRefresh { loadInterstitial() }
@@ -194,7 +225,7 @@ class AdsManager(private val activity: Activity) {
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loadingInterstitial = false
                     Log.i(TAG, "Interstitial not loaded: ${error.code} ${error.message}")
-                    handler.postDelayed({ loadInterstitial() }, RETRY_MS)
+                    if (!released) handler.postDelayed({ loadInterstitial() }, RETRY_MS)
                 }
             })
     }
@@ -205,6 +236,9 @@ class AdsManager(private val activity: Activity) {
     private fun fresh(loadedAt: Long) = System.currentTimeMillis() - loadedAt < MAX_AGE_MS
 
     fun release() {
+        released = true
+        rewarded = null
+        interstitial = null
         handler.removeCallbacksAndMessages(null)
         banner?.destroy()
         banner = null

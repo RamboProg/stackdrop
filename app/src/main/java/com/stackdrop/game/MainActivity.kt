@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
         gameView.onResumeGame()
         online.onResume()
         ads.resume()
+        billing.refresh()
     }
 
     override fun onPause() {

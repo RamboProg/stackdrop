@@ -177,6 +177,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         sound.muted = !save.soundOn
         sound.setLevel(save.soundLevel)
         haptics.enabled = save.vibrationOn
+        bridge.setAdsMuted(!save.soundOn)
         applyComfort()
         if (reduceMotion) splash.finish()
         modes = listOf(StackMode(host), TowerMode(host))
@@ -188,6 +189,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         pacing.enabled = !premium
     }
 
+    /** Before the game thread starts, or on it (via GameEvent.Resize) once it runs. */
     fun resize(w: Int, h: Int) {
         width = w
         height = h
@@ -272,7 +274,10 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     private fun handleEvent(event: GameEvent) {
         when (event) {
-            GameEvent.Back -> if (splash.active) splash.skip() else if (!hud.onBack()) backToMenu()
+            is GameEvent.Resize -> resize(event.width, event.height)
+            // While an ad is opening, Back would end a run the ad is about to revive.
+            GameEvent.Back -> if (splash.active) splash.skip() else if (!adShowing && !hud.onBack()) backToMenu()
+            is GameEvent.AdShown -> pacing.onFullScreenShown(interstitial = event.placement == null)
             is GameEvent.Toast -> hud.showBanner(event.message)
             is GameEvent.AuthChanged -> {
                 account = event.account
@@ -590,6 +595,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         if (wasMuted && !sound.muted) sound.resumeMusic()
         if (!wasMuted && sound.muted) sound.pauseMusic()
         haptics.enabled = save.vibrationOn
+        bridge.setAdsMuted(!save.soundOn)
         applyComfort()
         // Switching theme resets the modes, so it waits until the player is back on a menu.
         if (state == State.MENU || state == State.SETTINGS) expireFreeTheme()
@@ -652,7 +658,6 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         sound.play(SoundManager.BUTTON)
         if (!adShowing && pacing.shouldShow(save.gamesPlayed, newBest, bridge.interstitialReady())) {
             pendingStart = m
-            pacing.onFullScreenShown(interstitial = true)
             beginAd()
             bridge.maybeShowInterstitial()
             return
@@ -735,7 +740,6 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     private fun showRewarded(placement: RewardPlacement) {
         earned = null
-        pacing.onFullScreenShown(interstitial = false)
         beginAd()
         bridge.showRewarded(placement)
     }
@@ -844,6 +848,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
             save.soundOn && !wasOn -> sound.resumeMusic()
             !save.soundOn && wasOn -> sound.pauseMusic()
         }
+        bridge.setAdsMuted(!save.soundOn)
         sound.play(SoundManager.BUTTON)
         if (save.soundOn != wasOn) syncSoon()
     }

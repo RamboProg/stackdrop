@@ -1,6 +1,8 @@
 package com.stackdrop.game.billing
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
@@ -16,8 +18,9 @@ import com.android.billingclient.api.QueryPurchasesParams
 
 /**
  * Google Play Billing for the one-time "premium" product (no banner or between-run ads, and the
- * gold app icon). Play is the source of truth: ownership is re-checked on every launch, so
- * reinstalls, new phones and refunds are handled. All callbacks arrive on the UI thread.
+ * gold app icon). Play is the source of truth: ownership is re-checked on every launch and every
+ * return to the app, so reinstalls, new phones, refunds and pending purchases that complete in the
+ * background are handled. All callbacks arrive on the UI thread.
  */
 class BillingManager(private val activity: Activity, private val listener: Listener) : PurchasesUpdatedListener {
 
@@ -38,14 +41,27 @@ class BillingManager(private val activity: Activity, private val listener: Liste
         .build()
 
     private var product: ProductDetails? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var connected = false
+    private var connecting = false
+    private var ended = false
+    private var retryMs = FIRST_RETRY_MS
 
     fun start() {
+        if (ended || connected || connecting) return
+        connecting = true
         client.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
+                connecting = false
                 if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                    // Play may be updating or briefly unavailable; try again, waiting longer each time.
                     Log.i(TAG, "Billing unavailable: ${result.responseCode} ${result.debugMessage}")
+                    if (!ended) handler.postDelayed(::start, retryMs)
+                    retryMs = (retryMs * 2).coerceAtMost(MAX_RETRY_MS)
                     return
                 }
+                connected = true
+                retryMs = FIRST_RETRY_MS
                 loadProduct()
                 restore()
             }
@@ -82,7 +98,18 @@ class BillingManager(private val activity: Activity, private val listener: Liste
         }
     }
 
-    fun end() = client.endConnection()
+    /** On returning to the app: picks up purchases that completed meanwhile, or retries setup. */
+    fun refresh() {
+        if (!connected) return start()
+        if (product == null) loadProduct()
+        restore()
+    }
+
+    fun end() {
+        ended = true
+        handler.removeCallbacksAndMessages(null)
+        client.endConnection()
+    }
 
     override fun onPurchasesUpdated(result: BillingResult, purchases: List<Purchase>?) {
         when (result.responseCode) {
@@ -142,12 +169,17 @@ class BillingManager(private val activity: Activity, private val listener: Liste
         }
     }
 
-    /** Unacknowledged purchases are refunded by Play after three days. */
-    private fun acknowledge(purchase: Purchase) {
+    /**
+     * Unacknowledged purchases are refunded by Play after three days, so a failure is retried a few
+     * times now, and again on every return to the app (refresh) until it goes through.
+     */
+    private fun acknowledge(purchase: Purchase, attempt: Int = 1) {
         val params = AcknowledgePurchaseParams.newBuilder().setPurchaseToken(purchase.purchaseToken).build()
         client.acknowledgePurchase(params) { result ->
-            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                Log.w(TAG, "Acknowledge failed: ${result.responseCode} ${result.debugMessage}")
+            if (result.responseCode == BillingClient.BillingResponseCode.OK) return@acknowledgePurchase
+            Log.w(TAG, "Acknowledge failed (attempt $attempt): ${result.responseCode} ${result.debugMessage}")
+            if (attempt < ACK_ATTEMPTS && !ended) {
+                handler.postDelayed({ acknowledge(purchase, attempt + 1) }, FIRST_RETRY_MS * attempt)
             }
         }
     }
@@ -156,5 +188,8 @@ class BillingManager(private val activity: Activity, private val listener: Liste
         /** Create a one-time product with exactly this ID in Play Console → Monetize → In-app products. */
         const val PREMIUM_ID = "premium"
         private const val TAG = "Billing"
+        private const val FIRST_RETRY_MS = 5_000L
+        private const val MAX_RETRY_MS = 5 * 60_000L
+        private const val ACK_ATTEMPTS = 3
     }
 }

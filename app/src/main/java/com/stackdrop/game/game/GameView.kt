@@ -21,9 +21,13 @@ class GameView(context: Context, bridge: PlatformBridge, online: OnlineApi) : Su
     override fun surfaceCreated(holder: SurfaceHolder) = Unit
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        game.resize(width, height)
         if (loop == null) {
+            // No game thread yet, so the game can be sized directly before it starts.
+            game.resize(width, height)
             loop = GameLoop(holder, game).also { it.start() }
+        } else {
+            // The game thread may be mid-frame; it applies the new size before its next update.
+            game.post(GameEvent.Resize(width, height))
         }
     }
 
@@ -52,5 +56,10 @@ class GameView(context: Context, bridge: PlatformBridge, online: OnlineApi) : Su
 
     fun onPauseGame() = game.onPause()
 
-    fun release() = game.release()
+    /** Stops the game thread before releasing sound, so nothing plays on released players. */
+    fun release() {
+        loop?.stopLoop()
+        loop = null
+        game.release()
+    }
 }

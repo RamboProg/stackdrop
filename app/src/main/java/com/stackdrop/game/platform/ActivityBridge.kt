@@ -66,10 +66,18 @@ class ActivityBridge(
     }
 
     override fun showPrivacyOptions() = onUi {
-        consent.showPrivacyOptions { privacyRequired = consent.privacyOptionsRequired }
+        consent.showPrivacyOptions {
+            privacyRequired = consent.privacyOptionsRequired
+            // Consent given here for the first time lets ads start now instead of next launch.
+            if (consent.canRequestAds) ads.start()
+        }
     }
 
     override fun buyPremium() = onUi { billing.buy() }
+
+    override fun setAdsMuted(muted: Boolean) {
+        ads.muted = muted
+    }
 
     override fun rewardedReady() = ads.rewardedReady
 

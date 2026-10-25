@@ -51,6 +51,9 @@ sealed class GameEvent {
     data class Toast(val message: String) : GameEvent()
     data class RewardEarned(val placement: RewardPlacement) : GameEvent()
     data class AdClosed(val placement: RewardPlacement?) : GameEvent()
+
+    /** A full-screen ad is on screen; [placement] is null for an interstitial. */
+    data class AdShown(val placement: RewardPlacement?) : GameEvent()
     data class RankPassed(val friendName: String, val friendScore: Int) : GameEvent()
 
     /** Google Play says whether this player owns premium. */
@@ -59,4 +62,7 @@ sealed class GameEvent {
     /** Localized premium price, or null when Play cannot sell it right now. */
     data class PremiumPrice(val price: String?) : GameEvent()
     data object Back : GameEvent()
+
+    /** The surface changed size while the game thread was running. */
+    data class Resize(val width: Int, val height: Int) : GameEvent()
 }

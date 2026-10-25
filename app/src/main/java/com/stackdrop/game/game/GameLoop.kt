@@ -2,6 +2,7 @@ package com.stackdrop.game.game
 
 import android.graphics.Canvas
 import android.os.Build
+import android.util.Log
 import android.view.SurfaceHolder
 import kotlin.math.min
 
@@ -40,26 +41,38 @@ class GameLoop(
         }
     }
 
+    // The surface can go away between frames (app leaving the screen); the loop then idles until
+    // it is stopped. Logged once per loop so a real drawing problem still shows up.
     private fun lock(): Canvas? = try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) holder.lockHardwareCanvas() else holder.lockCanvas()
     } catch (e: Exception) {
+        if (!lockFailureLogged) {
+            lockFailureLogged = true
+            Log.w(TAG, "Couldn't lock the surface; skipping frames", e)
+        }
         null
     }
 
+    private var lockFailureLogged = false
+
     fun stopLoop() {
         running = false
+        var interrupted = false
         while (true) {
             try {
                 join()
-                return
+                break
             } catch (e: InterruptedException) {
-                // keep waiting for the render thread to finish
+                // Keep waiting for the render thread to finish, then pass the interrupt on.
+                interrupted = true
             }
         }
+        if (interrupted) Thread.currentThread().interrupt()
     }
 
     private companion object {
         const val STEP = 1.0 / 60.0
         const val MAX_FRAME = 0.25
+        const val TAG = "GameLoop"
     }
 }
