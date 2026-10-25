@@ -19,6 +19,7 @@ import com.stackdrop.game.game.tower.TowerMode
 import com.stackdrop.game.online.AccountSnapshot
 import com.stackdrop.game.online.BoardEntry
 import com.stackdrop.game.online.BoardSnapshot
+import com.stackdrop.game.online.CloudPush
 import com.stackdrop.game.online.Boards
 import com.stackdrop.game.online.Friend
 import com.stackdrop.game.online.FriendCodes
@@ -76,6 +77,13 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         private set
     var account = AccountSnapshot.SIGNED_OUT
         private set
+
+    /**
+     * The account whose cloud save has been merged into this phone's save, so pushes may go to it.
+     * Null until then. Read by onPause on the UI thread.
+     */
+    @Volatile
+    private var cloudUid: String? = null
 
     /** Public profile; null until the player chooses a name. */
     var profile: ProfileSnapshot? = null
@@ -202,7 +210,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     /** UI thread. Reading the save here is safe; it is only written on the game thread. */
     fun onPause() {
         sound.pauseMusic()
-        if (save.dirty) online.pushNow(save.snapshot())
+        val uid = cloudUid ?: return
+        if (save.dirty) online.pushNow(CloudPush(uid, save.snapshot()))
     }
 
     fun release() = sound.release()
@@ -265,9 +274,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         when (event) {
             GameEvent.Back -> if (splash.active) splash.skip() else if (!hud.onBack()) backToMenu()
             is GameEvent.Toast -> hud.showBanner(event.message)
-            is GameEvent.AuthChanged -> account = event.account
-            is GameEvent.CloudLoaded -> applyCloud(event.remote)
-            is GameEvent.CloudPushed -> save.markSynced(event.rev)
+            is GameEvent.AuthChanged -> {
+                account = event.account
+                // A different account: nothing is saved until its cloud copy has been merged in.
+                if (event.account.uid != cloudUid) cloudUid = null
+            }
+            is GameEvent.CloudLoaded -> if (event.uid == account.uid) applyCloud(event.uid, event.remote)
+            is GameEvent.CloudPushed -> if (event.uid == cloudUid) applyPushed(event.written)
+            GameEvent.SignedOut -> resetLocal("Signed out. Your progress is saved in your Google account")
             is GameEvent.AuthFailed -> hud.showBanner(event.reason)
             is GameEvent.ProfileLoaded -> {
                 profile = event.profile
@@ -300,22 +314,33 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
                 NAME_PROMPT -> submitName(event.value)
                 CODE_PROMPT -> submitFriendCode(event.value)
             }
-            GameEvent.AccountDeleted -> resetAfterDeletion()
+            GameEvent.AccountDeleted -> resetLocal("Your account was deleted")
             else -> Unit
         }
     }
 
-    /** Merges the cloud save into the local one, then pushes the result if the cloud lacks it. */
-    private fun applyCloud(remote: SaveSnapshot?) {
+    /** Merges [uid]'s cloud save into the local one, then pushes the result if the cloud lacks it. */
+    private fun applyCloud(uid: String, remote: SaveSnapshot?) {
+        cloudUid = uid
         val local = save.snapshot()
         if (remote == null) {
-            online.pushNow(local)
+            online.pushNow(CloudPush(uid, local))
             return
         }
         val merged = SaveMerge.merge(local, remote)
         val cloudHasIt = merged == remote
         if (merged != local || cloudHasIt) save.restore(merged, dirty = !cloudHasIt)
-        if (!cloudHasIt) online.pushNow(merged)
+        if (!cloudHasIt) online.pushNow(CloudPush(uid, merged))
+        refreshFromSave()
+    }
+
+    /**
+     * The cloud now holds [written]. Changes made on this phone since the push was taken are merged
+     * on top, so nothing is lost; they stay marked unsaved until the next push.
+     */
+    private fun applyPushed(written: SaveSnapshot) {
+        val merged = SaveMerge.merge(save.snapshot(), written)
+        save.restore(merged, dirty = merged != written)
         refreshFromSave()
     }
 
@@ -440,6 +465,11 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     }
 
     private fun onConfirmed(id: String) {
+        if (id == SIGN_OUT_PROMPT) {
+            val uid = cloudUid ?: return
+            online.signOut(CloudPush(uid, save.snapshot()))
+            return
+        }
         if (!id.startsWith(REMOVE_PREFIX)) return
         val uid = id.removePrefix(REMOVE_PREFIX)
         online.removeFriend(uid)
@@ -512,19 +542,39 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     fun signInWithGoogle() = bridge.signInWithGoogle()
 
-    fun signOut() = bridge.signOut()
+    /**
+     * Progress lives in the Google account, so signing out leaves the phone with a fresh guest save.
+     * That needs the account's cloud copy to be current, hence online only.
+     */
+    fun signOut() {
+        if (cloudUid == null || cloudUid != account.uid) {
+            hud.showBanner("Connect to the internet to sign out")
+            return
+        }
+        bridge.confirm(
+            ConfirmPrompt(
+                id = SIGN_OUT_PROMPT,
+                title = "Sign out?",
+                message = "Your progress is saved to your Google account. This phone starts over as a guest " +
+                    "until you sign in again.",
+                confirmLabel = "Sign out",
+            )
+        )
+    }
 
     /** Permanent; the bridge asks twice before anything is deleted. */
     fun deleteAccount() = bridge.deleteAccount()
 
-    private fun resetAfterDeletion() {
+    /** After account deletion or sign-out: a fresh guest save, keeping only settings. */
+    private fun resetLocal(message: String) {
+        cloudUid = null
         save.resetKeepingSettings()
         profile = null
         guestAvatar = -1
         refreshFreeToday()
         applyTheme(usableSavedTheme())
         if (state != State.MENU) setState(State.MENU, withFade = true)
-        hud.showBanner("Your account was deleted")
+        hud.showBanner(message)
     }
 
     // endregion
@@ -542,7 +592,10 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         if (state == State.MENU || state == State.SETTINGS) expireFreeTheme()
     }
 
-    private fun syncSoon() = online.queuePush(save.snapshot())
+    private fun syncSoon() {
+        val uid = cloudUid ?: return
+        online.queuePush(CloudPush(uid, save.snapshot()))
+    }
 
     /** Button press feedback: the shared scale bounce plus a light tick. */
     fun press(r: RectF) {
@@ -960,6 +1013,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         private const val NAME_PROMPT = "name"
         private const val CODE_PROMPT = "friend_code"
         private const val REMOVE_PREFIX = "remove_friend:"
+        private const val SIGN_OUT_PROMPT = "sign_out"
         private const val REVIVE_SECONDS = 5f
         private const val REVIVE_MIN_SCORE = 10
         private const val DOUBLE_MIN_GEMS = 3

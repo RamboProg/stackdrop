@@ -18,11 +18,14 @@ sealed class GameEvent {
     data class AuthChanged(val account: AccountSnapshot) : GameEvent()
     data class AuthFailed(val reason: String) : GameEvent()
 
-    /** The cloud save was read; null when this account has none yet. */
-    data class CloudLoaded(val remote: SaveSnapshot?) : GameEvent()
+    /** [uid]'s cloud save was read; null when that account has none yet. */
+    data class CloudLoaded(val uid: String, val remote: SaveSnapshot?) : GameEvent()
 
-    /** The cloud confirmed the save at [rev]. */
-    data class CloudPushed(val rev: Int) : GameEvent()
+    /** [uid]'s cloud save now holds [written], the merge of what was pushed and what was there. */
+    data class CloudPushed(val uid: String, val written: SaveSnapshot) : GameEvent()
+
+    /** The player left their Google account; the phone starts over as a guest. */
+    data object SignedOut : GameEvent()
 
     /** The signed-in player's public profile; null when they have not chosen a name yet. */
     data class ProfileLoaded(val profile: ProfileSnapshot?) : GameEvent()

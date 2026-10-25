@@ -11,7 +11,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import com.stackdrop.game.BuildConfig
 import com.stackdrop.game.data.PendingRun
-import com.stackdrop.game.data.SaveSnapshot
 import com.stackdrop.game.game.GameEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -29,8 +28,14 @@ interface OnlineApi {
     /** False when this build has no Firebase config; everything online is then hidden. */
     val available: Boolean
 
-    fun queuePush(s: SaveSnapshot)
-    fun pushNow(s: SaveSnapshot)
+    fun queuePush(p: CloudPush)
+    fun pushNow(p: CloudPush)
+
+    /**
+     * Saves [final] to the cloud, then signs out; the game resets the phone on SignedOut. When the
+     * save can't be written the player stays signed in, so no progress is stranded on the phone.
+     */
+    fun signOut(final: CloudPush?)
     fun claimName(name: String, avatar: Int)
     fun setAvatar(avatar: Int)
 
@@ -95,7 +100,7 @@ class OnlineServices(context: Context) : OnlineApi {
                 functions.useEmulator(BuildConfig.EMULATOR_HOST, FUNCTIONS_PORT)
             }
             auth = AuthRepo(firebaseAuth)
-            cloud = CloudSave(db, auth, scope) { rev -> events(GameEvent.CloudPushed(rev)) }
+            cloud = CloudSave(db, auth, scope) { uid, written -> events(GameEvent.CloudPushed(uid, written)) }
             profiles = ProfileRepo(db, functions)
             boards = LeaderboardRepo(db, functions, File(appContext.filesDir, BOARD_CACHE_DIR))
             friends = FriendsRepo(db, functions)
@@ -125,12 +130,12 @@ class OnlineServices(context: Context) : OnlineApi {
         }
     }
 
-    override fun queuePush(s: SaveSnapshot) {
-        cloud?.queuePush(s)
+    override fun queuePush(p: CloudPush) {
+        cloud?.queuePush(p)
     }
 
-    override fun pushNow(s: SaveSnapshot) {
-        cloud?.pushNow(s)
+    override fun pushNow(p: CloudPush) {
+        cloud?.pushNow(p)
     }
 
     override fun claimName(name: String, avatar: Int) {
@@ -276,28 +281,59 @@ class OnlineServices(context: Context) : OnlineApi {
     fun completeGoogleSignIn(idToken: String) {
         val repo = auth ?: return
         scope.launch {
-            try {
-                when (repo.signInWithGoogle(idToken)) {
-                    AuthRepo.GoogleOutcome.LINKED -> events(GameEvent.AuthChanged(repo.current()))
-                    AuthRepo.GoogleOutcome.SWITCHED -> syncAccount(repo.current())
-                }
-                events(GameEvent.Toast("Signed in with Google"))
+            val guestUid = repo.uid
+            val outcome = try {
+                repo.signInWithGoogle(idToken)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Google sign-in failed", e)
                 events(GameEvent.AuthFailed("Couldn't sign in. Try again"))
+                return@launch
+            }
+            events(GameEvent.Toast("Signed in with Google"))
+            when (outcome) {
+                AuthRepo.GoogleOutcome.Linked -> events(GameEvent.AuthChanged(repo.current()))
+                is AuthRepo.GoogleOutcome.Switched -> {
+                    // Nothing may be saved until this account's cloud copy has been merged in.
+                    synced = false
+                    guestUid?.let { cloud?.forget(it) }
+                    runLogged("Cloud pull after switching accounts") { syncAccount(repo.current()) }
+                    outcome.guestToken?.let { deleteGuest(it) }
+                }
             }
         }
     }
 
-    /** Leaves the Google account. Local progress stays on the phone under a new guest account. */
-    fun signOut() {
+    /**
+     * Data deletion: the guest account a Google sign-in switched away from. Its progress was merged
+     * into the Google account on this phone; left alone, its name, friends and ranks would stay in
+     * an account nobody can reach or delete.
+     */
+    private suspend fun deleteGuest(guestToken: String) {
+        runLogged("Deleting the guest account left behind") { profiles?.deleteGuest(guestToken) }
+    }
+
+    override fun signOut(final: CloudPush?) {
         val repo = auth ?: return
+        val save = cloud ?: return
         scope.launch {
+            if (final != null) {
+                try {
+                    save.write(final)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Final save before sign-out failed", e)
+                    events(GameEvent.Toast("Couldn't save to your account. Try again when you're online"))
+                    return@launch
+                }
+                save.forget(final.uid)
+            }
             repo.signOut()
             clearCredentials()
             synced = false
+            events(GameEvent.SignedOut)
             events(GameEvent.ProfileLoaded(null))
             events(GameEvent.AuthChanged(AccountSnapshot.SIGNED_OUT))
             runLogged("Guest sign-in after sign-out") { syncAccount(signedInAccount()) }
@@ -309,12 +345,16 @@ class OnlineServices(context: Context) : OnlineApi {
         val repo = profiles ?: return
         val authRepo = auth ?: return
         scope.launch {
+            // Stop saving first, so no write can recreate the cloud save after it is deleted.
+            val uid = authRepo.uid
+            uid?.let { cloud?.forget(it) }
             try {
                 repo.deleteAccount()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "deleteAccount failed", e)
+                uid?.let { cloud?.remember(it) }
                 events(GameEvent.Toast("Couldn't delete. Check your connection"))
                 return@launch
             }
@@ -338,8 +378,10 @@ class OnlineServices(context: Context) : OnlineApi {
         val uid = account.uid ?: return
         val save = cloud ?: return
         val remote = save.pull(uid)
+        // Signed back in to an account this session signed out of: it may be saved again.
+        save.remember(uid)
         synced = true
-        events(GameEvent.CloudLoaded(remote))
+        events(GameEvent.CloudLoaded(uid, remote))
         runLogged("Profile load") { events(GameEvent.ProfileLoaded(profiles?.load(uid))) }
         runLogged("Friends load") { friends?.let { events(GameEvent.FriendsLoaded(it.load(uid))) } }
     }

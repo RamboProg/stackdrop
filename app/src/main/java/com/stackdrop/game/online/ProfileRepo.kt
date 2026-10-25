@@ -35,6 +35,11 @@ class ProfileRepo(private val db: FirebaseFirestore, private val functions: Fire
         functions.getHttpsCallable("deleteAccount").call(emptyMap<String, Any>()).await()
     }
 
+    /** Deletes the guest account a Google sign-in switched away from; [guestToken] proves it was ours. */
+    suspend fun deleteGuest(guestToken: String) {
+        functions.getHttpsCallable("deleteGuest").call(mapOf("token" to guestToken)).await()
+    }
+
     private fun fromDoc(uid: String, doc: DocumentSnapshot): ProfileSnapshot {
         val bests = (doc.get("bests") as? Map<*, *>).orEmpty()
             .mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? Number)?.let { key to it.toInt() } } }

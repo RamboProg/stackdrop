@@ -6,7 +6,6 @@ package com.stackdrop.game.platform
  */
 interface PlatformBridge {
     fun signInWithGoogle()
-    fun signOut()
     fun deleteAccount()
     fun promptText(request: TextPrompt)
 

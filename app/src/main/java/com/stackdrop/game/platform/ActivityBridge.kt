@@ -125,15 +125,6 @@ class ActivityBridge(
             .show()
     }
 
-    override fun signOut() = onUi {
-        MaterialAlertDialogBuilder(activity)
-            .setTitle("Sign out?")
-            .setMessage("Progress on this phone stays here, but it stops syncing to your Google account.")
-            .setPositiveButton("Sign out") { _, _ -> online.signOut() }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
     /** Two confirmations: deleting is permanent and removes the player's data everywhere. */
     override fun deleteAccount() = onUi {
         MaterialAlertDialogBuilder(activity)

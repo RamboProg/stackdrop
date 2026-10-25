@@ -7,6 +7,7 @@ import com.stackdrop.game.audio.SoundManager
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.game.ThemeRules
 import java.util.TimeZone
+import java.util.UUID
 import kotlin.math.min
 
 /**
@@ -19,6 +20,7 @@ class SaveData(context: Context) {
 
     init {
         migrateTheme()
+        migrateGems()
     }
 
     /** Increments on every synced change; the higher rev wins spendable values in a merge. */
@@ -29,9 +31,13 @@ class SaveData(context: Context) {
     val dirty: Boolean
         get() = prefs.getBoolean(KEY_DIRTY, false)
 
+    /** Earning and spending go into this device's entry of the [GemLedger], which merges safely. */
     var gems: Int
-        get() = prefs.getInt(KEY_GEMS, 0)
-        set(v) = change { putInt(KEY_GEMS, v) }
+        get() = GemLedger.total(ledger())
+        set(v) {
+            val next = GemLedger.add(ledger(), deviceId(), v - gems)
+            change { putString(KEY_LEDGER, GemLedger.encode(next)) }
+        }
 
     var gamesPlayed: Int
         get() = prefs.getInt(KEY_GAMES, 0)
@@ -97,10 +103,16 @@ class SaveData(context: Context) {
         get() = PendingRuns.decode(prefs.getString(KEY_PENDING_RUNS, "") ?: "")
         set(v) = prefs.edit { putString(KEY_PENDING_RUNS, PendingRuns.encode(v)) }
 
-    /** Rewarded "+25 gems" ads left today. Local only. */
-    fun freeGemsLeft(): Int =
-        if (prefs.getLong(KEY_FREE_GEMS_DAY, -1L) == today()) FREE_GEMS_PER_DAY - prefs.getInt(KEY_FREE_GEMS_USED, 0)
-        else FREE_GEMS_PER_DAY
+    /** Rewarded "+25 gems" ads left today. Local only. None when the clock was turned back. */
+    fun freeGemsLeft(): Int {
+        val day = prefs.getLong(KEY_FREE_GEMS_DAY, -1L)
+        val today = today()
+        return when {
+            day == today -> FREE_GEMS_PER_DAY - prefs.getInt(KEY_FREE_GEMS_USED, 0)
+            day > today -> 0
+            else -> FREE_GEMS_PER_DAY
+        }
+    }
 
     fun useFreeGems() {
         val used = FREE_GEMS_PER_DAY - freeGemsLeft() + 1
@@ -139,19 +151,21 @@ class SaveData(context: Context) {
 
     private fun unlocked(): Set<String> = prefs.getStringSet(KEY_UNLOCKED, emptySet()) ?: emptySet()
 
-    fun canClaimDaily() = prefs.getLong(KEY_LAST_DAILY, -1L) != today()
+    // Only a later day counts, so turning the clock back can't claim the gift again.
+    fun canClaimDaily() = prefs.getLong(KEY_LAST_DAILY, -1L) < today()
 
     /** Grants the daily gift and returns the gem reward, or 0 if already claimed today. */
     fun claimDaily(): Int {
         val today = today()
         val last = prefs.getLong(KEY_LAST_DAILY, -1L)
-        if (last == today) return 0
+        if (last >= today) return 0
         val newStreak = if (last == today - 1) streak + 1 else 1
         val reward = DAILY_BASE * min(newStreak, DAILY_MAX_STREAK)
+        val next = GemLedger.add(ledger(), deviceId(), reward)
         change {
             putLong(KEY_LAST_DAILY, today)
             putInt(KEY_STREAK, newStreak)
-            putInt(KEY_GEMS, gems + reward)
+            putString(KEY_LEDGER, GemLedger.encode(next))
         }
         return reward
     }
@@ -168,7 +182,7 @@ class SaveData(context: Context) {
         val rev = rev
         return SaveSnapshot(
             rev = rev,
-            gems = gems,
+            ledger = ledger(),
             unlockedThemes = unlocked().toSet(),
             selectedTheme = selectedTheme,
             bests = MODES.associateWith { best(it) },
@@ -183,7 +197,7 @@ class SaveData(context: Context) {
     fun restore(s: SaveSnapshot, dirty: Boolean) = prefs.edit {
         putInt(KEY_REV, s.rev)
         putBoolean(KEY_DIRTY, dirty)
-        putInt(KEY_GEMS, s.gems)
+        putString(KEY_LEDGER, GemLedger.encode(s.ledger))
         putStringSet(KEY_UNLOCKED, s.unlockedThemes)
         putString(KEY_THEME, s.selectedTheme)
         for ((mode, score) in s.bests) putInt(bestKey(mode), score)
@@ -195,7 +209,10 @@ class SaveData(context: Context) {
         putBoolean(KEY_REDUCE_MOTION, s.settings.reduceMotion)
     }
 
-    /** After account deletion: a fresh install's save, keeping only the player's settings. */
+    /**
+     * After account deletion or sign-out: a fresh install's save, keeping only the player's settings.
+     * The device ID goes too, so the next account gets a new ledger entry.
+     */
     fun resetKeepingSettings() {
         val sound = soundOn
         val level = lastSoundLevel
@@ -216,17 +233,36 @@ class SaveData(context: Context) {
         }
     }
 
-    /** The cloud confirmed [pushedRev]; clears [dirty] unless something changed since. */
-    fun markSynced(pushedRev: Int) {
-        if (rev == pushedRev) prefs.edit { putBoolean(KEY_DIRTY, false) }
-    }
-
     private inline fun change(crossinline block: SharedPreferences.Editor.() -> Unit) {
         val next = rev + 1
         prefs.edit {
             block()
             putInt(KEY_REV, next)
             putBoolean(KEY_DIRTY, true)
+        }
+    }
+
+    private fun ledger(): Map<String, GemCount> = GemLedger.decode(prefs.getString(KEY_LEDGER, "") ?: "")
+
+    /**
+     * Names this install's entry in the gem ledger. Local only, and new after every reset, so a fresh
+     * guest never shares an entry with the account it left (the larger count would hide its gems).
+     */
+    private fun deviceId(): String {
+        prefs.getString(KEY_DEVICE, null)?.let { return it }
+        val id = UUID.randomUUID().toString().replace("-", "").take(DEVICE_ID_LENGTH)
+        prefs.edit { putString(KEY_DEVICE, id) }
+        return id
+    }
+
+    // Saves from before the ledger kept a plain balance; it becomes the shared legacy entry, so a
+    // cloud copy of the same old balance merges with it instead of adding to it.
+    private fun migrateGems() {
+        if (prefs.contains(KEY_LEDGER) || !prefs.contains(KEY_GEMS)) return
+        val old = prefs.getInt(KEY_GEMS, 0)
+        prefs.edit {
+            putString(KEY_LEDGER, GemLedger.encode(mapOf(GemLedger.LEGACY to GemCount(old, 0))))
+            remove(KEY_GEMS)
         }
     }
 
@@ -237,14 +273,19 @@ class SaveData(context: Context) {
     // the original neon look. Only brand-new installs start on the calm default.
     private fun migrateTheme() {
         if (prefs.contains(KEY_THEME)) return
-        val returning = prefs.contains(KEY_GAMES) || prefs.contains(KEY_GEMS) || prefs.contains(KEY_BEST)
+        val returning = prefs.contains(KEY_GAMES) || prefs.contains(KEY_GEMS) || prefs.contains(KEY_LEDGER) ||
+            prefs.contains(KEY_BEST)
         val id = if (returning) Palette.DEFAULT_ID else Palette.NEW_PLAYER_ID
         prefs.edit { putString(KEY_THEME, id) }
     }
 
     private companion object {
         const val KEY_BEST = "best"
+        /** Plain balance from before the gem ledger; only read once, by [migrateGems]. */
         const val KEY_GEMS = "gems"
+        const val KEY_LEDGER = "gem_ledger"
+        const val KEY_DEVICE = "device_id"
+        const val DEVICE_ID_LENGTH = 12
         const val KEY_GAMES = "games"
         const val KEY_THEME = "theme"
         const val KEY_MODE = "mode"
