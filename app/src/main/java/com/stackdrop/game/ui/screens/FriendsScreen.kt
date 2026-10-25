@@ -91,14 +91,15 @@ class FriendsScreen(
                 game.press(namePill)
                 game.editName()
             }
-            addButton.contains(x, y) -> {
+            widgets.hit(addButton, x, y) -> {
                 game.press(addButton)
                 game.promptFriendCode()
             }
-            codeButton.contains(x, y) -> {
+            widgets.hit(codeButton, x, y) -> {
                 game.press(codeButton)
                 game.shareFriendCode()
             }
+            game.friends == null && game.friendsFailed -> if (y in listTop..listBottom) game.retryFriends()
             y in listTop..listBottom -> tapItem(x, y)
         }
         return true
@@ -148,7 +149,9 @@ class FriendsScreen(
             else -> {
                 widgets.pill(canvas, addButton, "ADD", accent2, highlight = true)
                 widgets.pill(canvas, codeButton, "MY CODE  ${profile.displayCode}", accent)
-                if (snapshot == null) {
+                if (snapshot == null && game.friendsFailed) {
+                    centered(canvas, "Couldn't load your friends. Tap to try again", dim)
+                } else if (snapshot == null) {
                     widgets.spinner(canvas, w / 2f, (listTop + listBottom) / 2f, u * 4f, accent, game.time)
                 } else {
                     rebuild(snapshot)

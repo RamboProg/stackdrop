@@ -18,12 +18,16 @@ class DragTracker {
     private var pending = 0f
     private var velocity = 0f
 
+    /** This press caught a gliding list; it only stops the glide and is not a tap. */
+    private var caughtGlide = false
+
     fun down(x: Float, y: Float) {
         startX = x
         startY = y
         lastY = y
         active = true
         dragging = false
+        caughtGlide = abs(velocity) > slop
         pending = 0f
         velocity = 0f
     }
@@ -43,7 +47,7 @@ class DragTracker {
     fun up(): Boolean {
         if (!active) return false
         active = false
-        return !dragging
+        return !dragging && !caughtGlide
     }
 
     fun cancel() {

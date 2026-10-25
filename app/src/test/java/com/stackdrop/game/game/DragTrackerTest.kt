@@ -67,6 +67,19 @@ class DragTrackerTest {
     }
 
     @Test
+    fun pressThatCatchesAGlideIsNotATap() {
+        drag.down(0f, 0f)
+        drag.move(0f, 50f)
+        drag.update(STEP)
+        drag.up()
+        drag.down(0f, 0f)
+        assertFalse(drag.up())
+        // Once still, the next press is a tap again.
+        drag.down(0f, 0f)
+        assertTrue(drag.up())
+    }
+
+    @Test
     fun cancelledPressIsNeitherTapNorGlide() {
         drag.down(0f, 0f)
         drag.cancel()

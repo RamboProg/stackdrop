@@ -75,11 +75,11 @@ class MenuScreen(
                 game.press(friendsButton)
                 game.openFriends()
             }
-            settingsButton.contains(x, y) -> {
+            widgets.hit(settingsButton, x, y) -> {
                 game.press(settingsButton)
                 game.openSettings()
             }
-            profileChip.contains(x, y) -> {
+            widgets.hit(profileChip, x, y) -> {
                 game.press(profileChip)
                 game.openProfile()
             }
@@ -87,6 +87,9 @@ class MenuScreen(
                 game.press(giftButton)
                 game.claimDaily()
             }
+            // A tap on the background starts a run, but one that just missed a button doesn't.
+            widgets.near(x, y, u * Widgets.NEAR_MISS, themesButton, ranksButton, friendsButton, giftButton, settingsButton,
+                profileChip, modeCards[0], modeCards[1]) -> Unit
             else -> game.startMode(game.mode)
         }
         return true

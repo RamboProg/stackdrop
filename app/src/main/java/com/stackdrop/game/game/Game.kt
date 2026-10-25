@@ -146,6 +146,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     var popoverProfile: ProfileSnapshot? = null
         private set
 
+    /** The friends list failed to load and there is no earlier copy to show. */
+    var friendsFailed = false
+        private set
+
+    /** The popover's profile failed to load. */
+    var popoverFailed = false
+        private set
+
     var friends: FriendsSnapshot? = null
         private set
     val hasFriendRequests get() = friends?.incoming?.isNotEmpty() == true
@@ -271,6 +279,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
             }
             TouchQueue.UP -> if (drag.up() && hud.tapsOnUp) hud.onTap(x, y)
             TouchQueue.CANCEL -> drag.cancel()
+            // Quick two-finger play still drops a block; scrolling lists ignore the extra finger.
+            TouchQueue.EXTRA_DOWN -> if (!hud.tapsOnUp) hud.onTap(x, y)
         }
     }
 
@@ -304,7 +314,10 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
                 if (state == State.LEADERBOARD) requestBoard()
             }
             is GameEvent.RunDropped -> dropPending(event.runId)
+            GameEvent.FriendsFailed -> friendsFailed = friends == null
+            is GameEvent.PlayerFailed -> if (event.uid == popover?.uid) popoverFailed = true
             is GameEvent.FriendsLoaded -> {
+                friendsFailed = false
                 friends = event.friends
                 if (state == State.LEADERBOARD && boardTab == BoardTab.FRIENDS) requestBoard()
             }
@@ -387,6 +400,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     fun openPlayer(entry: BoardEntry) {
         if (entry.uid == account.uid) return
         popover = entry
+        popoverFailed = false
         popoverProfile = null
         haptics.ui()
         online.loadPlayer(entry.uid)
@@ -428,8 +442,15 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     // region Friends
 
+    fun retryFriends() {
+        sound.play(SoundManager.BUTTON)
+        friendsFailed = false
+        online.loadFriends()
+    }
+
     fun openFriends() {
         sound.play(SoundManager.BUTTON)
+        friendsFailed = false
         online.loadFriends()
         setState(State.FRIENDS)
     }
@@ -457,8 +478,24 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         online.sendFriendRequest(code, null)
     }
 
+    /** Accepts at once; a decline is asked first, since it sits right next to accept and can't be undone. */
     fun respondToRequest(request: FriendRequest, accept: Boolean) {
         haptics.ui()
+        if (!accept) {
+            bridge.confirm(
+                ConfirmPrompt(
+                    id = DECLINE_PREFIX + request.fromUid,
+                    title = "Decline ${request.fromName}?",
+                    message = "They won't be able to ask again for a week.",
+                    confirmLabel = "Decline",
+                )
+            )
+            return
+        }
+        answerRequest(request, accept = true)
+    }
+
+    private fun answerRequest(request: FriendRequest, accept: Boolean) {
         online.respondFriendRequest(request.fromUid, accept)
         // Hide it right away; the reload that follows confirms the change.
         friends = friends?.let { f -> f.copy(incoming = f.incoming - request) }
@@ -479,6 +516,11 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         if (id == SIGN_OUT_PROMPT) {
             val uid = cloudUid ?: return
             online.signOut(CloudPush(uid, save.snapshot()))
+            return
+        }
+        if (id.startsWith(DECLINE_PREFIX)) {
+            val uid = id.removePrefix(DECLINE_PREFIX)
+            friends?.incoming?.firstOrNull { it.fromUid == uid }?.let { answerRequest(it, accept = false) }
             return
         }
         if (!id.startsWith(REMOVE_PREFIX)) return
@@ -1050,6 +1092,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         private const val CODE_PROMPT = "friend_code"
         private const val REMOVE_PREFIX = "remove_friend:"
         private const val SIGN_OUT_PROMPT = "sign_out"
+        private const val DECLINE_PREFIX = "decline_friend:"
         private const val REVIVE_SECONDS = 5f
         private const val REVIVE_MIN_SCORE = 10
         private const val DOUBLE_MIN_GEMS = 3

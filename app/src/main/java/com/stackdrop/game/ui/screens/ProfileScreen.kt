@@ -77,11 +77,11 @@ class ProfileScreen(
                 game.press(if (hasProfile) nameRect else choosePill)
                 game.editName()
             }
-            hasProfile && copyButton.contains(x, y) -> {
+            hasProfile && widgets.hit(copyButton, x, y) -> {
                 game.press(copyButton)
                 game.copyFriendCode()
             }
-            hasProfile && shareButton.contains(x, y) -> {
+            hasProfile && widgets.hit(shareButton, x, y) -> {
                 game.press(shareButton)
                 game.shareFriendCode()
             }
@@ -89,7 +89,7 @@ class ProfileScreen(
                 game.press(accountButton)
                 if (game.account.anonymous) game.signInWithGoogle() else game.signOut()
             }
-            online && game.account.uid != null && deleteButton.contains(x, y) -> {
+            online && game.account.uid != null && widgets.hit(deleteButton, x, y) -> {
                 game.press(deleteButton)
                 game.deleteAccount()
             }

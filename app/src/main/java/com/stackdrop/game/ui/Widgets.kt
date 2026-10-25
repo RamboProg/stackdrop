@@ -1,9 +1,11 @@
 package com.stackdrop.game.ui
 
+import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -23,10 +25,28 @@ class Widgets(private val neon: Neon) {
     private var pressed: RectF? = null
     private var pressTime = 0f
 
+    /** The smallest comfortable touch target, 48dp. */
+    private val minTouch = 48f * Resources.getSystem().displayMetrics.density
+
     fun resize(w: Float, h: Float, u: Float) {
         this.w = w
         this.h = h
         this.u = u
+    }
+
+    /**
+     * Hit test for a small control with free space around it: [r] counts as at least a 48dp square
+     * around its centre. Neighbouring controls must not be closer than that, or the first one tested wins.
+     */
+    fun hit(r: RectF, x: Float, y: Float): Boolean {
+        val halfW = max(r.width(), minTouch) / 2f
+        val halfH = max(r.height(), minTouch) / 2f
+        return abs(x - r.centerX()) <= halfW && abs(y - r.centerY()) <= halfH
+    }
+
+    /** True when ([x], [y]) is on, or within [margin] of, any of [rects]: a near miss, not a tap on the background. */
+    fun near(x: Float, y: Float, margin: Float, vararg rects: RectF): Boolean = rects.any {
+        x >= it.left - margin && x <= it.right + margin && y >= it.top - margin && y <= it.bottom + margin
     }
 
     fun press(r: RectF) {
@@ -171,8 +191,10 @@ class Widgets(private val neon: Neon) {
         neon.glowText(canvas, message, w / 2f, cy + size * 0.36f, size, neon.textColor, accent, (255 * a).toInt())
     }
 
-    private companion object {
-        const val PRESS_TIME = 0.18f
-        const val DARK = 0xFF14121F.toInt()
+    companion object {
+        /** How close (in layout units) a tap must land to a control to count as a near miss. */
+        const val NEAR_MISS = 3f
+        private const val PRESS_TIME = 0.18f
+        private const val DARK = 0xFF14121F.toInt()
     }
 }

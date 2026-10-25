@@ -59,6 +59,9 @@ class TouchQueue {
         const val MOVE = 1
         const val UP = 2
         const val CANCEL = 3
+
+        /** A second finger touching down: a tap during play, ignored by scrolling lists. */
+        const val EXTRA_DOWN = 4
         private const val CAPACITY = 64
     }
 }

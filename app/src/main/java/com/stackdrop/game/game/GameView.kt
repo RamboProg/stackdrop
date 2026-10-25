@@ -36,16 +36,37 @@ class GameView(context: Context, bridge: PlatformBridge, online: OnlineApi) : Su
         loop = null
     }
 
+    /** The finger that started the gesture; drags follow it alone, so a second finger can't make lists jump. */
+    private var activePointer = MotionEvent.INVALID_POINTER_ID
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                val i = event.actionIndex
-                game.onTouch(TouchQueue.DOWN, event.getX(i), event.getY(i))
+            MotionEvent.ACTION_DOWN -> {
+                activePointer = event.getPointerId(0)
+                game.onTouch(TouchQueue.DOWN, event.x, event.y)
             }
-            MotionEvent.ACTION_MOVE -> game.onTouch(TouchQueue.MOVE, event.getX(0), event.getY(0))
-            MotionEvent.ACTION_UP -> game.onTouch(TouchQueue.UP, event.x, event.y)
-            MotionEvent.ACTION_CANCEL -> game.onTouch(TouchQueue.CANCEL, event.x, event.y)
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                val i = event.actionIndex
+                game.onTouch(TouchQueue.EXTRA_DOWN, event.getX(i), event.getY(i))
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val i = event.findPointerIndex(activePointer)
+                if (i >= 0) game.onTouch(TouchQueue.MOVE, event.getX(i), event.getY(i))
+            }
+            MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == activePointer) {
+                // The dragging finger lifted while another stays down: end the drag there.
+                game.onTouch(TouchQueue.CANCEL, event.getX(event.actionIndex), event.getY(event.actionIndex))
+                activePointer = MotionEvent.INVALID_POINTER_ID
+            }
+            MotionEvent.ACTION_UP -> {
+                if (event.getPointerId(0) == activePointer) game.onTouch(TouchQueue.UP, event.x, event.y)
+                activePointer = MotionEvent.INVALID_POINTER_ID
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                game.onTouch(TouchQueue.CANCEL, event.x, event.y)
+                activePointer = MotionEvent.INVALID_POINTER_ID
+            }
         }
         return true
     }

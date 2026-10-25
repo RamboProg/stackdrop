@@ -232,8 +232,21 @@ class OnlineServices(context: Context) : OnlineApi {
 
     override fun loadFriends() {
         val repo = friends ?: return
-        val uid = auth?.uid ?: return
-        scope.launch { runLogged("Friends load") { events(GameEvent.FriendsLoaded(repo.load(uid))) } }
+        val uid = auth?.uid
+        if (uid == null) {
+            events(GameEvent.FriendsFailed)
+            return
+        }
+        scope.launch {
+            try {
+                events(GameEvent.FriendsLoaded(repo.load(uid)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.i(TAG, "Friends load failed", e)
+                events(GameEvent.FriendsFailed)
+            }
+        }
     }
 
     override fun sendFriendRequest(code: String?, uid: String?) {
@@ -250,8 +263,12 @@ class OnlineServices(context: Context) : OnlineApi {
 
     override fun loadFriendsBoard(modeId: String, friendIds: List<String>) {
         val repo = friends ?: return
-        val uid = auth?.uid ?: return
         val id = FriendsRepo.friendsBoardId(modeId)
+        val uid = auth?.uid
+        if (uid == null) {
+            events(GameEvent.BoardLoaded(BoardSnapshot.offlineEmpty(id)))
+            return
+        }
         scope.launch {
             try {
                 events(GameEvent.BoardLoaded(repo.board(modeId, uid, friendIds, System.currentTimeMillis())))
@@ -266,7 +283,17 @@ class OnlineServices(context: Context) : OnlineApi {
 
     override fun loadPlayer(uid: String) {
         val repo = profiles ?: return
-        scope.launch { runLogged("Player load") { repo.load(uid)?.let { events(GameEvent.PlayerLoaded(it)) } } }
+        scope.launch {
+            try {
+                val profile = repo.load(uid)
+                events(if (profile != null) GameEvent.PlayerLoaded(profile) else GameEvent.PlayerFailed(uid))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.i(TAG, "Player load failed", e)
+                events(GameEvent.PlayerFailed(uid))
+            }
+        }
     }
 
     /** Runs a friends change, reports failures gently, then reloads the list either way. */

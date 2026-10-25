@@ -36,15 +36,17 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
 
     override fun onTap(x: Float, y: Float): Boolean {
         if (game.stateTime < Game.RESTART_DELAY) return true
-        if (game.canDoubleGems && doubleButton.contains(x, y)) {
+        if (game.canDoubleGems && widgets.hit(doubleButton, x, y)) {
             game.press(doubleButton)
             game.watchForDoubleGems()
-        } else if (offerName() && nameButton.contains(x, y)) {
+        } else if (offerName() && widgets.hit(nameButton, x, y)) {
             game.press(nameButton)
             game.editName()
-        } else if (menuButton.contains(x, y)) {
+        } else if (widgets.hit(menuButton, x, y)) {
             game.press(menuButton)
             game.leaveGameOver()
+        } else if (!retryButton.contains(x, y) && widgets.near(x, y, u * Widgets.NEAR_MISS, doubleButton, nameButton, menuButton)) {
+            // Just missed a button: not a request to play again.
         } else {
             game.press(retryButton)
             game.startMode(game.mode)

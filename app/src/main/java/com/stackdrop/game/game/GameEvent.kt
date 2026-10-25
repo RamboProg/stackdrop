@@ -48,6 +48,12 @@ sealed class GameEvent {
     data class RunDropped(val runId: String) : GameEvent()
     data class BoardLoaded(val board: BoardSnapshot) : GameEvent()
     data class FriendsLoaded(val friends: FriendsSnapshot) : GameEvent()
+
+    /** The friends list couldn't be loaded (offline, or not signed in yet). */
+    data object FriendsFailed : GameEvent()
+
+    /** Another player's profile couldn't be loaded for the leaderboard popover. */
+    data class PlayerFailed(val uid: String) : GameEvent()
     data class Toast(val message: String) : GameEvent()
     data class RewardEarned(val placement: RewardPlacement) : GameEvent()
     data class AdClosed(val placement: RewardPlacement?) : GameEvent()

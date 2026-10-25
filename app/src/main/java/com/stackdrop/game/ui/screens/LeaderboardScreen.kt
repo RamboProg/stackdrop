@@ -55,13 +55,15 @@ class LeaderboardScreen(
         this.h = h
         this.u = u
         val modeTop = h * 0.1f
-        modeTabs[0].set(u * 20f, modeTop, u * 49f, modeTop + u * 7f)
-        modeTabs[1].set(u * 51f, modeTop, u * 80f, modeTop + u * 7f)
-        val periodTop = modeTop + u * 9f
-        periodTabs[0].set(u * 8f, periodTop, u * 33f, periodTop + u * 7f)
-        periodTabs[1].set(u * 35f, periodTop, u * 65f, periodTop + u * 7f)
-        periodTabs[2].set(u * 67f, periodTop, u * 92f, periodTop + u * 7f)
-        infoY = periodTop + u * 12f
+        // Taller than they look: the tabs sit close together, so their touch areas can't be widened.
+        val tabH = u * 9f
+        modeTabs[0].set(u * 20f, modeTop, u * 49f, modeTop + tabH)
+        modeTabs[1].set(u * 51f, modeTop, u * 80f, modeTop + tabH)
+        val periodTop = modeTop + tabH + u * 2f
+        periodTabs[0].set(u * 8f, periodTop, u * 33f, periodTop + tabH)
+        periodTabs[1].set(u * 35f, periodTop, u * 65f, periodTop + tabH)
+        periodTabs[2].set(u * 67f, periodTop, u * 92f, periodTop + tabH)
+        infoY = periodTop + tabH + u * 5f
         listTop = infoY + u * 3f
         listBottom = h * 0.79f
         rowH = min(h * 0.065f, u * 12f)
@@ -284,7 +286,9 @@ class LeaderboardScreen(
         avatars.draw(canvas, entry.avatar, cx, card.top + u * 11f, u * 7f)
         neon.glowText(canvas, entry.name, cx, card.top + u * 25f, u * 5.5f, text, accent)
         val profile = game.popoverProfile
-        if (profile == null) {
+        if (profile == null && game.popoverFailed) {
+            neon.text(canvas, "Couldn't load their scores", cx, card.top + u * 34f, u * 3.6f, dim, 230)
+        } else if (profile == null) {
             widgets.spinner(canvas, cx, card.top + u * 33f, u * 2.5f, accent, game.time)
         } else {
             val stack = profile.bests["stack"] ?: 0
