@@ -9,6 +9,7 @@ import com.stackdrop.game.game.Palette
 import com.stackdrop.game.ui.Avatars
 import com.stackdrop.game.ui.Neon
 import com.stackdrop.game.ui.Widgets
+import kotlin.math.max
 import kotlin.math.sin
 
 class MenuScreen(
@@ -108,8 +109,8 @@ class MenuScreen(
         // Reduce motion keeps the title still.
         val titleTime = if (game.reduceMotion) 0f else t
 
-        // Kept clear of the gem counter on short screens (or above the banner strip).
-        val titleY = h * 0.12f + u * 3f
+        // The title's top stays clear of the gem counter and gear row, however deep the cutout.
+        val titleY = max(h * 0.12f + u * 3f, widgets.topRowY() + TITLE_GAP * u)
         neon.chroma(canvas, "STACK", w / 2f, titleY, u * 17f, titleTime, accent)
         neon.chroma(canvas, "DROP", w / 2f, titleY + u * 15f, u * 17f, titleTime + 0.7f, accent)
         neon.text(canvas, "ARCADE TOWERS", w / 2f, titleY + u * 22f, u * 3.6f, neon.textColor, 150)
@@ -128,7 +129,7 @@ class MenuScreen(
             widgets.pill(canvas, giftButton, "DAY ${game.save.streak}", accent, dim = true)
         }
         widgets.gear(canvas, settingsButton, accent)
-        widgets.gems(canvas, game.save.gems, inset = u * 11f)
+        widgets.gems(canvas, game.save.gems, inset = u * GEMS_INSET)
         drawProfileChip(canvas, accent2)
     }
 
@@ -175,5 +176,12 @@ class MenuScreen(
         neon.text(canvas, "BEST ${game.save.best(mode.id)}", r.centerX(), r.top + r.height() * 0.89f, u * 3.6f,
             neon.textColor, 170)
         canvas.restore()
+    }
+
+    private companion object {
+        /** From the top row of controls down to the title's baseline: the title's cap height plus air. */
+        const val TITLE_GAP = 19f
+        /** How far left of the screen edge the gem counter sits, leaving room beside the gear. */
+        const val GEMS_INSET = 15f
     }
 }
