@@ -22,6 +22,14 @@ test("impossible runs are rejected", () => {
   assert.equal(checkRun(run({ mode: "stack", durationMs: 10_000, perfects: 3, bestCombo: 2 })).ok, true);
 });
 
+test("streaks add free stacks, but only as many as the perfects allow", () => {
+  // 10 perfects can hold two streaks: 10 free stacks on top of 24 drops.
+  assert.equal(checkRun(run({ score: 34, perfects: 10, bestCombo: 10 })).ok, true);
+  assert.deepEqual(checkRun(run({ score: 35, perfects: 10, bestCombo: 10 })), { ok: false, reason: "score-exceeds-drops" });
+  // 4 perfects can't hold a streak.
+  assert.equal(checkRun(run({ score: 25, perfects: 4 })).ok, false);
+});
+
 test("unusual but possible runs are flagged, not rejected", () => {
   const nearlyAllPerfect = checkRun(run({ score: 40, drops: 40, perfects: 40, bestCombo: 40, durationMs: 120_000 }));
   assert.deepEqual(nearlyAllPerfect, { ok: true, suspicious: true });

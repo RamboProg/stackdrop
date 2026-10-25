@@ -7,6 +7,13 @@ export const MIN_DROP_MS: Record<Mode, number> = { stack: 220, tower: 650 };
 
 export const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
 
+/**
+ * Every STREAK_LENGTH perfect drops in a row add STREAK_STACKS free pieces to the score without a
+ * drop (StreakBonus.kt in the app). A run can't hold more streaks than its perfects allow.
+ */
+export const STREAK_LENGTH = 5;
+export const STREAK_STACKS = 5;
+
 export interface RunInput {
   mode: Mode;
   score: number;
@@ -38,7 +45,8 @@ export function parseRun(data: Record<string, unknown>): RunInput | null {
  */
 export function checkRun(r: RunInput): RunCheck {
   if (r.score > MAX_SCORE) return { ok: false, reason: "score-range" };
-  if (r.score > r.drops) return { ok: false, reason: "score-exceeds-drops" };
+  const freeStacks = Math.floor(r.perfects / STREAK_LENGTH) * STREAK_STACKS;
+  if (r.score > r.drops + freeStacks) return { ok: false, reason: "score-exceeds-drops" };
   if (r.perfects > r.drops) return { ok: false, reason: "perfects-exceed-drops" };
   if (r.bestCombo > r.perfects) return { ok: false, reason: "combo-exceeds-perfects" };
   const minMs = r.drops * MIN_DROP_MS[r.mode];
