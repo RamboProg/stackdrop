@@ -8,7 +8,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../src/common";
 import {
-  claimName, deleteAccount, removeFriend, respondFriendRequest, sendFriendRequest, setAvatar, submitScore,
+  claimName, deleteAccount, deleteGuest, removeFriend, respondFriendRequest, sendFriendRequest, setAvatar, submitScore,
 } from "../src/index";
 
 type Callable<T> = { run: (req: CallableRequest<unknown>) => T };
@@ -167,4 +167,45 @@ test("deleteAccount removes everything the player owns", async () => {
   }
   assert.equal((await db.doc("profiles/bob").get()).exists, true, "other players are untouched");
   await assert.rejects(getAuth().getUser("alice"), { code: "auth/user-not-found" });
+  assert.equal((await db.doc("deleted/alice").get()).exists, true, "marker blocks late cloud-save writes");
+});
+
+/** A real anonymous account on the Auth emulator, with the ID token the app would hold. */
+async function guestAccount(): Promise<{ uid: string; idToken: string }> {
+  const res = await fetch(
+    `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=test`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ returnSecureToken: true }) },
+  );
+  const body = (await res.json()) as { localId: string; idToken: string };
+  return { uid: body.localId, idToken: body.idToken };
+}
+
+test("deleteGuest removes the guest a Google sign-in left behind", async () => {
+  const guest = await guestAccount();
+  await as(guest.uid)(claimName, { name: "Guesty" });
+  await db.doc(`users/${guest.uid}`).set({ rev: 1, gems: 5 });
+
+  assert.deepEqual(await as("google-alice")(deleteGuest, { token: guest.idToken }), { ok: true });
+
+  for (const path of [`profiles/${guest.uid}`, "usernames/guesty", `users/${guest.uid}`]) {
+    assert.equal((await db.doc(path).get()).exists, false, `${path} should be gone`);
+  }
+  await assert.rejects(getAuth().getUser(guest.uid), { code: "auth/user-not-found" });
+});
+
+test("deleteGuest refuses bad tokens, non-guests and the caller itself", async () => {
+  await assert.rejects(as("bob")(deleteGuest, { token: "not-a-token" }), { code: "permission-denied" });
+  const guest = await guestAccount();
+  await assert.rejects(as(guest.uid)(deleteGuest, { token: guest.idToken }), { code: "invalid-argument" });
+  await getAuth().updateUser(guest.uid, { email: "real@example.com", password: "secret123" });
+  const signIn = await fetch(
+    `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=test`,
+    {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "real@example.com", password: "secret123", returnSecureToken: true }),
+    },
+  );
+  const { idToken } = (await signIn.json()) as { idToken: string };
+  await assert.rejects(as("bob")(deleteGuest, { token: idToken }), { code: "permission-denied" });
+  assert.ok(await getAuth().getUser(guest.uid), "a real account is never deleted this way");
 });

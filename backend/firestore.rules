@@ -11,13 +11,23 @@ service cloud.firestore {
     match /private/{uid}             { allow read, write: if false; }
 
     // Private cloud save. Gems here can be edited by a determined player; they only buy cosmetics.
+    // The app merges before every write, so each write carries a higher rev than the stored copy.
+    function validSave(d) {
+      return d.keys().hasOnly(['rev','gems','ledger','unlockedThemes','selectedTheme','bests','streak',
+          'lastDaily','gamesPlayed','settings','updatedAt'])
+        && d.rev is int && d.gems is int && d.gems >= 0 && d.gems <= 1000000
+        && (!('ledger' in d) || (d.ledger is map && d.ledger.size() <= 50));
+    }
+    // Set by account deletion; an ID token issued before it stays valid for up to an hour.
+    function beingDeleted(uid) { return exists(/databases/$(db)/documents/deleted/$(uid)); }
+
+    match /deleted/{uid}             { allow read, write: if false; }
+
     match /users/{uid} {
       allow read: if isMe(uid);
-      allow create: if isMe(uid) && request.resource.data.keys().hasOnly(
-        ['rev','gems','unlockedThemes','selectedTheme','bests','streak','lastDaily','gamesPlayed','settings','updatedAt']);
-      allow update: if isMe(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-        ['rev','gems','unlockedThemes','selectedTheme','bests','streak','lastDaily','gamesPlayed','settings','updatedAt'])
-        && request.resource.data.gems is int && request.resource.data.gems >= 0 && request.resource.data.gems <= 1000000;
+      allow create: if isMe(uid) && validSave(request.resource.data) && !beingDeleted(uid);
+      allow update: if isMe(uid) && validSave(request.resource.data) && !beingDeleted(uid)
+        && request.resource.data.rev > resource.data.rev;
       match /friends/{friendUid}     { allow read: if isMe(uid); allow write: if false; }
     }
 

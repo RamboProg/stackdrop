@@ -40,9 +40,33 @@ test("a player can create and read only their own save", async () => {
 test("the save rejects unknown fields and impossible gem counts", async () => {
   await assertFails(setDoc(doc(as("alice"), "users/alice"), { ...save, admin: true }));
   await assertSucceeds(setDoc(doc(as("alice"), "users/alice"), save));
-  await assertFails(updateDoc(doc(as("alice"), "users/alice"), { gems: -1 }));
-  await assertFails(updateDoc(doc(as("alice"), "users/alice"), { gems: 2_000_000 }));
+  await assertFails(updateDoc(doc(as("alice"), "users/alice"), { gems: -1, rev: 2 }));
+  await assertFails(updateDoc(doc(as("alice"), "users/alice"), { gems: 2_000_000, rev: 2 }));
   await assertSucceeds(updateDoc(doc(as("alice"), "users/alice"), { gems: 500, rev: 2 }));
+});
+
+test("a new save is checked like an update", async () => {
+  await assertFails(setDoc(doc(as("alice"), "users/alice"), { ...save, gems: -5 }));
+  await assertFails(setDoc(doc(as("alice"), "users/alice"), { ...save, gems: "lots" }));
+  await assertFails(setDoc(doc(as("alice"), "users/alice"), { ...save, ledger: "x" }));
+  await assertSucceeds(setDoc(doc(as("alice"), "users/alice"), { ...save, ledger: { d1: { e: 10, s: 0 } } }));
+});
+
+test("every write must carry a newer rev, so a stale phone can't overwrite the save", async () => {
+  await assertSucceeds(setDoc(doc(as("alice"), "users/alice"), { ...save, rev: 5 }));
+  await assertFails(updateDoc(doc(as("alice"), "users/alice"), { gems: 1, rev: 5 }));
+  await assertFails(setDoc(doc(as("alice"), "users/alice"), { ...save, rev: 3 }));
+  await assertSucceeds(updateDoc(doc(as("alice"), "users/alice"), { gems: 1, rev: 6 }));
+});
+
+test("a save being deleted can't be written again", async () => {
+  await assertSucceeds(setDoc(doc(as("alice"), "users/alice"), save));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "deleted/alice"), { expireAt: 1 });
+  });
+  await assertFails(updateDoc(doc(as("alice"), "users/alice"), { gems: 1, rev: 2 }));
+  await assertFails(setDoc(doc(as("alice"), "users/alice"), { ...save, rev: 9 }));
+  await assertFails(getDoc(doc(as("alice"), "deleted/alice")));
 });
 
 test("profiles are public to signed-in players but written only by functions", async () => {
