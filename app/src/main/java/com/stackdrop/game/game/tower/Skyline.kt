@@ -27,6 +27,9 @@ class Skyline {
     fun draw(canvas: Canvas, theme: Theme, horizon: Float) {
         if (w == 0) return
         if (builtFor !== theme || far == null || near == null) {
+            // Rebuilt on every theme change; free the old pair now rather than waiting for GC.
+            far?.recycle()
+            near?.recycle()
             far = build(theme, (h * 0.2f).toInt(), 11, 0.55f)
             near = build(theme, (h * 0.28f).toInt(), 23, 1f)
             builtFor = theme

@@ -177,6 +177,7 @@ class Backdrop {
         }
         cv.restore()
 
+        sun?.recycle()
         sun = bmp
         sunTheme = theme
         return bmp

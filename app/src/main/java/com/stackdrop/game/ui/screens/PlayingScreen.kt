@@ -8,6 +8,7 @@ import com.stackdrop.game.game.Game
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.ui.Hud
 import com.stackdrop.game.ui.Neon
+import com.stackdrop.game.ui.NumberText
 import com.stackdrop.game.ui.Widgets
 import kotlin.math.max
 import kotlin.math.min
@@ -25,6 +26,7 @@ class PlayingScreen(
     private val ringPath = Path()
     private val play = Path()
     private val veil = Paint()
+    private val scoreText = NumberText()
 
     private var w = 0f
     private var h = 0f
@@ -48,6 +50,20 @@ class PlayingScreen(
     }
 
     override fun onTap(x: Float, y: Float): Boolean {
+        if (game.paused) {
+            // Only the two buttons count, so a tap meant for the game doesn't quit by accident.
+            when {
+                keepGoing.contains(x, y) -> {
+                    game.press(keepGoing)
+                    game.resumeRun()
+                }
+                noThanks.contains(x, y) -> {
+                    game.press(noThanks)
+                    game.quitRun()
+                }
+            }
+            return true
+        }
         if (game.reviveOffered) {
             when {
                 keepGoing.contains(x, y) || ring.contains(x, y) -> {
@@ -65,9 +81,16 @@ class PlayingScreen(
         return true
     }
 
-    /** Back is ignored mid-run so a stray swipe never ends it; on the second-chance offer it declines. */
+    /**
+     * Back pauses a run (a stray swipe never ends it), resumes a paused one, and declines the
+     * second-chance offer.
+     */
     override fun onBack(): Boolean {
-        if (game.reviveOffered) game.declineRevive()
+        when {
+            game.paused -> game.resumeRun()
+            game.reviveOffered -> game.declineRevive()
+            else -> game.pauseRun()
+        }
         return true
     }
 
@@ -76,7 +99,7 @@ class PlayingScreen(
         val accent2 = Palette.accent2(game.theme)
         val still = game.reduceMotion
         val scorePop = if (still) 0f else hud.scorePop
-        neon.glowText(canvas, "${game.mode.score}", w / 2f, h * 0.11f, u * 15f * (1f + 0.25f * scorePop),
+        neon.glowText(canvas, scoreText.of(game.mode.score), w / 2f, h * 0.11f, u * 15f * (1f + 0.25f * scorePop),
             neon.textColor, accent)
 
         val comboTime = hud.comboTime
@@ -88,6 +111,16 @@ class PlayingScreen(
         game.mode.drawHud(canvas, neon, u, w, h)
         widgets.gems(canvas, game.save.gems)
         if (game.reviveOffered) drawSecondChance(canvas, accent, accent2)
+        if (game.paused) drawPaused(canvas, accent, accent2)
+    }
+
+    private fun drawPaused(canvas: Canvas, accent: Int, accent2: Int) {
+        veil.color = game.theme.panel
+        veil.alpha = 170
+        canvas.drawRect(0f, 0f, w, h, veil)
+        neon.glowText(canvas, "Paused", w / 2f, ring.centerY(), u * 9f, neon.textColor, accent)
+        widgets.pill(canvas, keepGoing, "RESUME", accent2, highlight = true)
+        widgets.pill(canvas, noThanks, "End run", accent, dim = true)
     }
 
     /** "Keep going?" with a soft ring that empties over five seconds. */

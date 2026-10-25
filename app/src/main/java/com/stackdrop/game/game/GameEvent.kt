@@ -63,6 +63,9 @@ sealed class GameEvent {
     data class PremiumPrice(val price: String?) : GameEvent()
     data object Back : GameEvent()
 
+    /** The app went to the background; a run in progress pauses. */
+    data object AppPaused : GameEvent()
+
     /** The surface changed size while the game thread was running. */
     data class Resize(val width: Int, val height: Int) : GameEvent()
 }

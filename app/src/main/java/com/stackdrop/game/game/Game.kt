@@ -212,6 +212,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     /** UI thread. Reading the save here is safe; it is only written on the game thread. */
     fun onPause() {
         sound.pauseMusic()
+        // Back from a call or the home screen, the player lands on a pause screen, not a moving block.
+        post(GameEvent.AppPaused)
         val uid = cloudUid ?: return
         if (save.dirty) online.pushNow(CloudPush(uid, save.snapshot()))
     }
@@ -232,7 +234,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         fade = max(0f, fade - dt * 3f)
         crossFade = max(0f, crossFade - dt / CROSS_FADE_TIME)
 
-        mode.update(dt)
+        if (!paused) mode.update(dt)
         // When a run is lost the game holds before game over, offering a second chance if one fits.
         if (state == State.PLAYING && mode.isFinished && !adShowing) {
             when {
@@ -275,6 +277,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private fun handleEvent(event: GameEvent) {
         when (event) {
             is GameEvent.Resize -> resize(event.width, event.height)
+            GameEvent.AppPaused -> pauseRun()
             // While an ad is opening, Back would end a run the ad is about to revive.
             GameEvent.Back -> if (splash.active) splash.skip() else if (!adShowing && !hud.onBack()) backToMenu()
             is GameEvent.AdShown -> pacing.onFullScreenShown(interstitial = event.placement == null)
@@ -617,6 +620,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private fun setState(s: State, withFade: Boolean = false) {
         state = s
         stateTime = 0f
+        paused = false
         if (withFade) fade = 1f
         // A press that changed screens must not also count as a tap or drag on the new one.
         drag.cancel()
@@ -793,6 +797,28 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     }
 
     // endregion
+
+    /** A run on hold: the mode stops updating until the player resumes or quits. */
+    var paused = false
+        private set
+
+    /** Pauses a run in progress; a lost run, a second-chance offer or an open ad has nothing to pause. */
+    fun pauseRun() {
+        if (state != State.PLAYING || mode.isOver || reviveOffered || adShowing) return
+        paused = true
+    }
+
+    fun resumeRun() {
+        sound.play(SoundManager.BUTTON)
+        paused = false
+    }
+
+    /** Ends the run where it stands; its score and gems count as if it had been lost. */
+    fun quitRun() {
+        sound.play(SoundManager.BUTTON)
+        paused = false
+        endRun()
+    }
 
     private fun endRun() {
         pacing.onRunEnded()

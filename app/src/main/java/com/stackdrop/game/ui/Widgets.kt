@@ -100,10 +100,12 @@ class Widgets(private val neon: Neon) {
     }
 
     /** Gem counter in the top-right corner, moved left by [inset] to make room for other buttons. */
+    private val gemText = NumberText()
+
     fun gems(canvas: Canvas, count: Int, inset: Float = 0f) {
         val y = h * 0.06f
         neon.gem(canvas, w - u * 7f - inset, y - u * 1.6f, u * 2.6f)
-        neon.glowText(canvas, "$count", w - u * 11.5f - inset, y, u * 5f, neon.textColor, Neon.GEM,
+        neon.glowText(canvas, gemText.of(count), w - u * 11.5f - inset, y, u * 5f, neon.textColor, Neon.GEM,
             align = Paint.Align.RIGHT)
     }
 

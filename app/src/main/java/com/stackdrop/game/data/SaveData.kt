@@ -36,7 +36,7 @@ class SaveData(context: Context) {
         get() = GemLedger.total(ledger())
         set(v) {
             val next = GemLedger.add(ledger(), deviceId(), v - gems)
-            change { putString(KEY_LEDGER, GemLedger.encode(next)) }
+            change { putLedger(next) }
         }
 
     var gamesPlayed: Int
@@ -165,7 +165,7 @@ class SaveData(context: Context) {
         change {
             putLong(KEY_LAST_DAILY, today)
             putInt(KEY_STREAK, newStreak)
-            putString(KEY_LEDGER, GemLedger.encode(next))
+            putLedger(next)
         }
         return reward
     }
@@ -197,7 +197,7 @@ class SaveData(context: Context) {
     fun restore(s: SaveSnapshot, dirty: Boolean) = prefs.edit {
         putInt(KEY_REV, s.rev)
         putBoolean(KEY_DIRTY, dirty)
-        putString(KEY_LEDGER, GemLedger.encode(s.ledger))
+        putLedger(s.ledger)
         putStringSet(KEY_UNLOCKED, s.unlockedThemes)
         putString(KEY_THEME, s.selectedTheme)
         for ((mode, score) in s.bests) putInt(bestKey(mode), score)
@@ -220,6 +220,7 @@ class SaveData(context: Context) {
         val reduce = reduceMotion
         // Premium was bought through Google Play, not the game account, so it survives too.
         val owned = premium
+        ledgerCache = null
         prefs.edit {
             clear()
             putBoolean(KEY_PREMIUM, owned)
@@ -242,7 +243,18 @@ class SaveData(context: Context) {
         }
     }
 
-    private fun ledger(): Map<String, GemCount> = GemLedger.decode(prefs.getString(KEY_LEDGER, "") ?: "")
+    // Decoded once and kept, since the gem count is drawn every frame. Every write goes through
+    // putLedger or clears it.
+    @Volatile
+    private var ledgerCache: Map<String, GemCount>? = null
+
+    private fun ledger(): Map<String, GemCount> =
+        ledgerCache ?: GemLedger.decode(prefs.getString(KEY_LEDGER, "") ?: "").also { ledgerCache = it }
+
+    private fun SharedPreferences.Editor.putLedger(ledger: Map<String, GemCount>) {
+        ledgerCache = ledger
+        putString(KEY_LEDGER, GemLedger.encode(ledger))
+    }
 
     /**
      * Names this install's entry in the gem ledger. Local only, and new after every reset, so a fresh
