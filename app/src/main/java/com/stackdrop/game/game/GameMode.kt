@@ -66,19 +66,17 @@ class ModeHost(
     /** Particle count for this theme, never below one. */
     fun particles(theme: Theme, count: Int) = max(1, (count * theme.particles).toInt())
 
-    /**
-     * A free streak piece landed: a rising note with a soft thud under it. The [last] piece swaps
-     * its tick for a fanfare and one firm hit.
-     */
-    fun streakLanded(index: Int, last: Boolean) {
+    /** A free streak piece landed: a rising note with a soft thud under it, and a firmer tick. */
+    fun streakLanded(index: Int) {
         sound.play(SoundManager.PERFECT, 2f.pow(STREAK_NOTES[min(index, STREAK_NOTES.lastIndex)] / 12f), 0.75f)
         sound.play(SoundManager.DROP, 1.3f, 0.3f)
-        if (last) {
-            sound.play(SoundManager.UNLOCK, 1f, 0.9f)
-            haptics.streakDone()
-        } else {
-            haptics.streakPiece(index)
-        }
+        haptics.streakPiece(index)
+    }
+
+    /** The streak's payoff: a fanfare and one firm hit. */
+    fun streakDone() {
+        sound.play(SoundManager.UNLOCK, 1f, 0.9f)
+        haptics.streakDone()
     }
 }
 

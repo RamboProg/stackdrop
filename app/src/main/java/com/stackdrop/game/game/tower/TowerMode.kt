@@ -36,18 +36,28 @@ import kotlin.random.Random
 class TowerMode(private val host: ModeHost) : GameMode {
 
     /** A placed module in tower-local coordinates: [x] is its center, [y] its bottom. */
-    private class Floor(val x: Float, val y: Float, val color: Int, val windows: Int, val lobby: Boolean) {
-        /** Visual offset from where it actually landed, easing to zero so snaps never pop. */
+    private class Floor(var x: Float, val y: Float, val color: Int, val windows: Int, val lobby: Boolean) {
+        /** Visual offset from where it actually sits, easing to zero so snaps never pop. */
         var settle = 0f
+
+        /** Seconds before [settle] starts easing; staggers the straightening wave up the tower. */
+        var hold = 0f
     }
 
+    /**
+     * A loose module with its center at [x], [y] and its [rotation] in degrees: one that slipped off
+     * the top, which [fades] away, or one broken off in a collapse, which stays where it lands.
+     */
     private class Tumble(
-        var x: Float, var y: Float, val vx: Float, var vy: Float,
-        val spin: Float, val color: Int, val windows: Int,
+        var x: Float, var y: Float, var vx: Float, var vy: Float,
+        var spin: Float, val color: Int, val windows: Int, val fades: Boolean, var rotation: Float = 0f,
     ) {
-        var rotation = 0f
         var age = 0f
+        var landed = false
     }
+
+    /** How far the part above [floor] hangs past its edge; 1.0 tips it. [floor] -1 is the street. */
+    private class Overhang(val ratio: Float, val floor: Int)
 
     private enum class Hook { LOWERING, READY, FALLING, EMPTY }
 
@@ -114,6 +124,17 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private var shownBalance = 0f
 
     private var collapsing = false
+    /** The toppling part has broken into loose modules. */
+    private var broken = false
+    /** The floor the top part tips over (-1: the whole tower tips over the street), and the edge it pivots on. */
+    private var hinge = -1
+    private var hingeX = 0f
+    private var hingeY = 0f
+    /** Floors that broke loose, kept so a second chance can put them back. */
+    private val toppled = ArrayList<Floor>()
+    private var impactGap = 0f
+    /** Counts down from the last streak floor landing to the tower straightening. */
+    private var straightenIn = 0f
     private var collapseAngle = 0f
     private var collapseV = 0f
     private var collapseDir = 1f
@@ -166,6 +187,10 @@ class TowerMode(private val host: ModeHost) : GameMode {
         endReason = ""
         overTime = 0f
         collapsing = false
+        broken = false
+        toppled.clear()
+        impactGap = 0f
+        straightenIn = 0f
         collapseAngle = 0f
         collapseV = 0f
         lean = 0f
@@ -197,8 +222,11 @@ class TowerMode(private val host: ModeHost) : GameMode {
         if (streak.active && !isOver) updateStreak(dt)
 
         if (collapsing) {
-            collapseV += collapseDir * (1.5f + abs(collapseAngle) * 7f) * dt
-            collapseAngle = (collapseAngle + collapseV * dt).coerceIn(-1.6f, 1.6f)
+            if (!broken) {
+                collapseV += collapseDir * (1.5f + abs(collapseAngle) * 7f) * dt
+                collapseAngle += collapseV * dt
+                if (abs(collapseAngle) >= BREAK_ANGLE) breakApart()
+            }
         } else {
             lean += (leanTarget - lean) * (1f - exp(-2.5f * dt))
             swayV += (-SWAY_K * sway - SWAY_D * swayV) * dt
@@ -207,17 +235,21 @@ class TowerMode(private val host: ModeHost) : GameMode {
         shownBalance += (balance - shownBalance) * (1f - exp(-6f * dt))
         shownTop += (floors.size * H - shownTop) * (1f - exp(-6f * dt))
         val settleDecay = exp(-10f * dt)
-        for (f in floors) f.settle *= settleDecay
+        for (f in floors) {
+            if (f.hold > 0f) f.hold -= dt else f.settle *= settleDecay
+        }
+        if (straightenIn > 0f) {
+            straightenIn -= dt
+            if (straightenIn <= 0f) straighten()
+        }
 
+        impactGap = max(0f, impactGap - dt)
         val it = tumbles.iterator()
         while (it.hasNext()) {
             val t = it.next()
             t.age += dt
-            t.vy -= GRAVITY * dt
-            t.x += t.vx * dt
-            t.y += t.vy * dt
-            t.rotation += t.spin * dt
-            if (t.age > 3f) it.remove()
+            fall(t, dt)
+            if (t.fades && t.age > 3f) it.remove()
         }
 
         particles.update(dt, w)
@@ -332,7 +364,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private fun nextBonus() {
         hook = Hook.EMPTY
         pickLook()
-        bonusX = bonusSpot()
+        bonusX = floors.lastOrNull()?.x ?: 0f
     }
 
     private fun updateStreak(dt: Float) {
@@ -343,7 +375,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         score = floors.size
         host.hud.onScore()
         val last = !streak.active
-        host.streakLanded(landed, last)
+        host.streakLanded(landed)
 
         val px = sx(bonusX + shiftAt(topY + H / 2f))
         val py = sy(topY)
@@ -355,45 +387,45 @@ class TowerMode(private val host: ModeHost) : GameMode {
             particles.flares(px, py, glow, if (last) 40 else 12, w * (if (last) 0.6f else 0.35f))
         }
 
-        // Free floors never topple the tower: they land where they steady it most.
+        // Free floors never topple the tower; the streak ends by straightening it anyway.
         balance = stability()
         leanTarget = sign(balance) * min(1f, abs(balance)).pow(1.5f)
         follow(bonusX, topY + H)
-        if (last) {
-            host.hud.showCombo("+${StreakBonus.STACKS} FLOORS  +${StreakBonus.GEMS} GEMS")
-            camera.shake(w * 0.005f * host.shakeScale(theme), 0.15f)
-            spawn()
-        } else {
-            nextBonus()
-        }
+        if (last) straightenIn = STRAIGHTEN_DELAY else nextBonus()
     }
 
     /**
-     * Right on top of the last floor, unless the tower is leaning; then up to a few nudges toward
-     * whichever side straightens it most, so a streak always helps.
+     * The streak's payoff: every floor slides back over the foundation, bottom to top, so the tower
+     * stands perfectly balanced again.
      */
-    private fun bonusSpot(): Float {
-        val support = floors.lastOrNull()?.x ?: 0f
-        val topY = floors.size * H
-        var bestX = support
-        var best = Float.MAX_VALUE
-        for (k in BONUS_NUDGES) {
-            val x = support + k * ASSIST
-            floors.add(Floor(x, topY, 0, 0, false))
-            val s = abs(stability())
-            floors.removeAt(floors.lastIndex)
-            if (k == 0 && s <= STEADY) return x
-            if (s < best) {
-                best = s
-                bestX = x
-            }
+    private fun straighten() {
+        val step = min(WAVE_STEP, WAVE_TIME / max(1, floors.size))
+        for ((i, f) in floors.withIndex()) {
+            f.settle += f.x
+            f.x = 0f
+            f.hold = i * step
         }
-        return bestX
+        balance = 0f
+        leanTarget = 0f
+        swayV *= 0.3f
+        host.streakDone()
+        host.hud.showCombo("BALANCED!  +${StreakBonus.GEMS} GEMS")
+        val top = floors.size * H
+        val glow = Palette.lighten(Palette.accent(theme), 0.3f)
+        if (theme.calm) {
+            particles.ring(sx(0f), sy(top), glow, w * 0.25f)
+            particles.screenMotes(sx(0f), sy(top), glow, host.particles(theme, 16), w * 0.12f)
+        } else {
+            particles.flares(sx(0f), sy(top), glow, 40, w * 0.6f)
+        }
+        camera.shake(w * 0.004f * host.shakeScale(theme), 0.15f)
+        follow(0f, top)
+        spawn()
     }
 
     private fun fallOff(offset: Float) {
         val dir = if (offset >= 0f) 1f else -1f
-        tumbles.add(Tumble(fx, fy + H / 2f, dir * 5f + fvx * 0.5f, 4f, dir * 220f, nextColor, nextWindows))
+        tumbles.add(Tumble(fx, fy + H / 2f, dir * 5f + fvx * 0.5f, 4f, dir * 220f, nextColor, nextWindows, fades = true))
         lives--
         combo = 0
         damageFlash = 1f
@@ -408,10 +440,19 @@ class TowerMode(private val host: ModeHost) : GameMode {
         }
     }
 
+    /**
+     * The part above the weakest floor starts to tip over that floor's edge as one piece; once it
+     * has swung far enough it breaks apart (see [breakApart]).
+     */
     private fun collapse() {
         collapsing = true
+        broken = false
         collapseDir = if (balance >= 0f) 1f else -1f
         collapseV = collapseDir * 0.2f
+        collapseAngle = 0f
+        hinge = worstOverhang().floor
+        hingeY = (hinge + 1) * H
+        hingeX = if (hinge >= 0) floors[hinge].x + collapseDir * W * 0.5f else collapseDir * W * FOUNDATION_HALF
         host.sound.play(SoundManager.FAIL, 0.8f, 0.55f)
         host.haptics.soft()
         camera.shake(w * 0.01f * host.shakeScale(theme), 0.3f)
@@ -430,6 +471,75 @@ class TowerMode(private val host: ModeHost) : GameMode {
         camera.targetX = 0f
     }
 
+    /** The toppling floors come loose, each keeping the speed and spin the swing gave it. */
+    private fun breakApart() {
+        broken = true
+        val c = cos(collapseAngle)
+        val s = sin(collapseAngle)
+        val px = hingeX + shiftAt(hingeY)
+        val swing = Math.toDegrees(collapseAngle.toDouble()).toFloat()
+        val spin = Math.toDegrees(collapseV.toDouble()).toFloat()
+        toppled.clear()
+        while (floors.size > hinge + 1) {
+            val f = floors.removeAt(floors.lastIndex)
+            toppled.add(f)
+            val mid = f.y + H / 2f
+            val dx = f.x + f.settle + shiftAt(mid) - px
+            val dy = mid - hingeY
+            // Turned clockwise by the swing angle about the hinge; velocity is the swing's ω × r.
+            val rx = dx * c + dy * s
+            val ry = -dx * s + dy * c
+            val tilt = Math.toDegrees(atan(slopeAt(mid)).toDouble()).toFloat()
+            tumbles.add(
+                Tumble(
+                    px + rx, hingeY + ry,
+                    collapseV * ry + (Random.nextFloat() - 0.5f) * 4f,
+                    -collapseV * rx + Random.nextFloat() * 3f,
+                    spin * (0.4f + Random.nextFloat() * 1.2f), f.color, f.windows,
+                    fades = false, rotation = tilt + swing,
+                )
+            )
+        }
+        host.sound.play(SoundManager.SLICE, 0.6f, 0.6f)
+        host.haptics.soft()
+        camera.shake(w * 0.008f * host.shakeScale(theme), 0.2f)
+    }
+
+    /** Gravity, then the street: a loose module bounces a little, slides to a stop and tips onto a flat side. */
+    private fun fall(t: Tumble, dt: Float) {
+        t.vy -= GRAVITY * dt
+        t.x += t.vx * dt
+        t.y += t.vy * dt
+        t.rotation += t.spin * dt
+        val a = Math.toRadians(t.rotation.toDouble()).toFloat()
+        val reach = abs(W / 2f * sin(a)) + abs(H / 2f * cos(a))
+        if (t.y - reach >= 0f) return
+        t.y = reach
+        if (!t.fades && t.vy < -IMPACT_SPEED) impact(t)
+        t.vy = if (t.vy < -IMPACT_SPEED) -t.vy * BOUNCE else 0f
+        t.landed = true
+        val grip = exp(-GROUND_GRIP * dt)
+        t.vx *= grip
+        t.spin *= grip
+        val flat = Math.round(t.rotation / 90f) * 90f
+        t.rotation += (flat - t.rotation) * (1f - exp(-6f * dt))
+    }
+
+    /** A collapsed module hits the street: a low thud and a knock, spaced out so a pile-up rumbles. */
+    private fun impact(t: Tumble) {
+        val strength = min(1f, -t.vy / 30f)
+        if (!t.landed) {
+            val px = sx(t.x)
+            val py = sy(0f)
+            particles.screenMotes(px, py, Palette.lighten(t.color, 0.3f), host.particles(theme, 4), w * 0.06f)
+        }
+        if (impactGap > 0f) return
+        impactGap = IMPACT_GAP
+        host.sound.play(SoundManager.DROP, 0.55f + Random.nextFloat() * 0.2f, 0.3f + 0.5f * strength)
+        host.haptics.land()
+        camera.shake(w * 0.004f * strength * host.shakeScale(theme), 0.12f)
+    }
+
     override fun canRevive() = isOver && !revived
 
     /**
@@ -439,9 +549,13 @@ class TowerMode(private val host: ModeHost) : GameMode {
     override fun revive() {
         if (!canRevive()) return
         if (collapsing) {
+            for (f in toppled.asReversed()) floors.add(f.also { it.settle = 0f })
+            toppled.clear()
+            tumbles.removeAll { !it.fades }
             repeat(min(2, floors.size)) { floors.removeAt(floors.lastIndex) }
             while (floors.isNotEmpty() && abs(stability()) > DANGER) floors.removeAt(floors.lastIndex)
             collapsing = false
+            broken = false
             collapseAngle = 0f
             collapseV = 0f
         } else {
@@ -491,23 +605,32 @@ class TowerMode(private val host: ModeHost) : GameMode {
      * Worst signed overhang ratio in the tower. For every floor, the combined center of mass of
      * everything above it must stay within half its width; 1.0 means it is about to tip.
      */
-    private fun stability(): Float {
+    private fun stability(): Float = worstOverhang().ratio
+
+    private fun worstOverhang(): Overhang {
         var sum = 0f
         var count = 0
         var worst = 0f
+        var at = -1
         for (i in floors.indices.reversed()) {
             if (count > 0) {
                 val r = (sum / count - floors[i].x) / (W * 0.5f)
-                if (abs(r) > abs(worst)) worst = r
+                if (abs(r) > abs(worst)) {
+                    worst = r
+                    at = i
+                }
             }
             sum += floors[i].x
             count++
         }
         if (count > 0) {
             val r = (sum / count) / (W * FOUNDATION_HALF)
-            if (abs(r) > abs(worst)) worst = r
+            if (abs(r) > abs(worst)) {
+                worst = r
+                at = -1
+            }
         }
-        return worst
+        return Overhang(worst, at)
     }
 
     private fun bend() = lean + sway + sin(clock * 1.3f) * WOBBLE * min(score, 20) / 20f
@@ -552,9 +675,14 @@ class TowerMode(private val host: ModeHost) : GameMode {
         drawStreet(canvas)
 
         val fh = H * sc
+        // Before it breaks apart, the toppling part turns about its hinge as one piece.
+        val toppling = if (collapsing && !broken) hinge + 1 else floors.size
         canvas.save()
-        if (collapsing) canvas.rotate(Math.toDegrees(collapseAngle.toDouble()).toFloat(), sx(0f), sy(0f))
-        for (f in floors) {
+        for (i in floors.indices) {
+            val f = floors[i]
+            if (i == toppling) {
+                canvas.rotate(Math.toDegrees(collapseAngle.toDouble()).toFloat(), sx(hingeX + shiftAt(hingeY)), sy(hingeY))
+            }
             val bottom = sy(f.y)
             if (!collapsing && (bottom < -fh * 2f || bottom - fh > h + fh * 2f)) continue
             val mid = f.y + H / 2f
@@ -570,7 +698,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         for (t in tumbles) {
             val px = sx(t.x)
             val py = sy(t.y)
-            val alpha = (255 * (1f - t.age / 3f)).toInt().coerceIn(0, 255)
+            val alpha = if (t.fades) (255 * (1f - t.age / 3f)).toInt().coerceIn(0, 255) else 255
             canvas.save()
             canvas.rotate(t.rotation, px, py)
             drawFloor(canvas, px, py + fh / 2f, t.color, t.windows, false, alpha)
@@ -823,16 +951,28 @@ class TowerMode(private val host: ModeHost) : GameMode {
         const val SWAY_KICK = 0.9f
         const val WOBBLE = 0.04f
         const val ASSIST = W * 0.12f
-        /** Free streak floors stay centered while the tower leans less than this. */
-        const val STEADY = 0.3f
-        /** Sideways nudges, in [ASSIST] steps, tried for a free streak floor; centered first. */
-        val BONUS_NUDGES = intArrayOf(0, -1, 1, -2, 2, -3, 3)
         /** Height a free streak floor falls from. */
         const val BONUS_DROP = H * 2.5f
         const val DANGER = 0.7f
         const val LIVES = 3
         const val OVER_TIME = 1.3f
-        const val COLLAPSE_TIME = 2.2f
+        const val COLLAPSE_TIME = 2.8f
+        /** Swing angle, in radians, at which a toppling part breaks into loose modules. */
+        const val BREAK_ANGLE = 0.45f
+        /** Share of its landing speed a loose module bounces back with. */
+        const val BOUNCE = 0.25f
+        /** Below this landing speed a module stops bouncing and rests. */
+        const val IMPACT_SPEED = 4f
+        /** How quickly a module on the street stops sliding and spinning. */
+        const val GROUND_GRIP = 5f
+        /** Shortest time between two impact sounds and knocks. */
+        const val IMPACT_GAP = 0.07f
+        /** Pause between the last streak floor landing and the tower straightening. */
+        const val STRAIGHTEN_DELAY = 0.15f
+        /** Delay between neighbouring floors as the straightening wave climbs. */
+        const val WAVE_STEP = 0.03f
+        /** Longest the straightening wave takes to reach the top, however tall the tower. */
+        const val WAVE_TIME = 0.6f
         const val MIN_ZOOM = 0.15f
         const val NEON_FLASH = 28
         const val CALM_FLASH = 18

@@ -269,7 +269,8 @@ class StackMode(private val host: ModeHost) : GameMode {
         b.y = rest
         bonus = null
         val last = !streak.active
-        host.streakLanded(landed, last)
+        host.streakLanded(landed)
+        if (last) host.streakDone()
         val glow = Palette.lighten(b.color, 0.4f)
         if (theme.calm) {
             particles.ripple(b, if (last) 3 else 1, glow)
