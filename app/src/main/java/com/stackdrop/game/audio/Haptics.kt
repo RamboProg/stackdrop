@@ -54,28 +54,40 @@ class Haptics(context: Context) {
     fun warn() = play(intArrayOf(TICK, TICK), floatArrayOf(0.45f, 0.45f), intArrayOf(0, 70), 10, 60)
 
     /** New best, unlocks and gifts: three rising taps. */
-    fun celebrate() {
+    fun celebrate() = pattern(
+        intArrayOf(CLICK, CLICK, CLICK), floatArrayOf(0.4f, 0.6f, 0.85f), intArrayOf(0, 70, 70),
+        longArrayOf(0, 14, 70, 14, 70, 18), intArrayOf(0, 80, 0, 120, 0, 160),
+    )
+
+    /** A free streak piece landing; each one a little firmer, like a ratchet winding up. */
+    fun streakPiece(index: Int) {
+        val i = min(index, 4)
+        play(intArrayOf(TICK), floatArrayOf(0.45f + i * 0.12f), intArrayOf(0), 10, 70 + i * 30)
+    }
+
+    /** The last streak piece: one firm hit with a short, fading echo. */
+    fun streakDone() = pattern(
+        intArrayOf(CLICK, TICK, TICK), floatArrayOf(1f, 0.6f, 0.35f), intArrayOf(0, 80, 60),
+        longArrayOf(0, 26, 70, 12, 50, 8), intArrayOf(0, 230, 0, 120, 0, 60),
+    )
+
+    private fun ready() = enabled && vibrator?.hasVibrator() == true
+
+    /** A multi-tap effect; [timings] and [amplitudes] are the waveform for devices without primitives. */
+    private fun pattern(ids: IntArray, scales: FloatArray, delays: IntArray, timings: LongArray, amplitudes: IntArray) {
         if (!ready()) return
         val v = vibrator ?: return
         when {
             primitives && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
-                v.vibrate(composition(intArrayOf(CLICK, CLICK, CLICK), floatArrayOf(0.4f, 0.6f, 0.85f), intArrayOf(0, 70, 70)))
+                v.vibrate(composition(ids, scales, delays))
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
-                v.vibrate(
-                    VibrationEffect.createWaveform(
-                        longArrayOf(0, 14, 70, 14, 70, 18),
-                        intArrayOf(0, 80, 0, 120, 0, 160),
-                        -1,
-                    )
-                )
+                v.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
             else -> {
                 @Suppress("DEPRECATION")
-                v.vibrate(longArrayOf(0, 14, 70, 14, 70, 18), -1)
+                v.vibrate(timings, -1)
             }
         }
     }
-
-    private fun ready() = enabled && vibrator?.hasVibrator() == true
 
     private fun play(ids: IntArray, scales: FloatArray, delays: IntArray, ms: Long, amplitude: Int) {
         if (!ready()) return

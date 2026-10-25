@@ -65,7 +65,25 @@ class ModeHost(
 
     /** Particle count for this theme, never below one. */
     fun particles(theme: Theme, count: Int) = max(1, (count * theme.particles).toInt())
+
+    /**
+     * A free streak piece landed: a rising note with a soft thud under it. The [last] piece swaps
+     * its tick for a fanfare and one firm hit.
+     */
+    fun streakLanded(index: Int, last: Boolean) {
+        sound.play(SoundManager.PERFECT, 2f.pow(STREAK_NOTES[min(index, STREAK_NOTES.lastIndex)] / 12f), 0.75f)
+        sound.play(SoundManager.DROP, 1.3f, 0.3f)
+        if (last) {
+            sound.play(SoundManager.UNLOCK, 1f, 0.9f)
+            haptics.streakDone()
+        } else {
+            haptics.streakPiece(index)
+        }
+    }
 }
+
+/** Semitones the streak pieces climb through, ending an octave up. */
+private val STREAK_NOTES = floatArrayOf(0f, 2f, 4f, 7f, 12f)
 
 /** Semitone offsets of a major scale, so consecutive perfects climb a melody. */
 private val PERFECT_SCALE = floatArrayOf(0f, 2f, 4f, 5f, 7f, 9f, 11f, 12f)

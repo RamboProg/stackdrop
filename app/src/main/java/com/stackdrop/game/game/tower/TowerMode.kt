@@ -12,6 +12,7 @@ import com.stackdrop.game.game.ModeHost
 import com.stackdrop.game.game.Palette
 import com.stackdrop.game.game.Particles
 import com.stackdrop.game.game.RunStats
+import com.stackdrop.game.game.StreakBonus
 import com.stackdrop.game.game.Theme
 import com.stackdrop.game.game.perfectPitch
 import com.stackdrop.game.ui.Neon
@@ -61,7 +62,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         private set
     override var endReason = ""
         private set
-    override val gemsEarned get() = perfects + score / 10
+    override val gemsEarned get() = perfects + score / 10 + streak.gems
     override val isFinished get() = isOver && overTime > (if (collapsing) COLLAPSE_TIME else OVER_TIME)
     override val runStats get() = RunStats(score, (playTime * 1000f).toLong(), drops, perfects, bestCombo, revived)
 
@@ -70,6 +71,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private val camera = Camera()
     private val particles = Particles()
     private val skyline = Skyline()
+    private val streak = StreakBonus()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
 
@@ -99,6 +101,8 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private var fvy = 0f
     private var nextColor = Color.WHITE
     private var nextWindows = 0
+    /** Where the free streak floor on its way down will land. */
+    private var bonusX = 0f
 
     /** Static lean and sway are fractions of the capped top shift, so tall towers never whip around. */
     private var lean = 0f
@@ -149,6 +153,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         floors.clear()
         tumbles.clear()
         particles.clear()
+        streak.reset()
         score = 0
         bestCombo = 0
         combo = 0
@@ -189,6 +194,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
         hookTime += dt
         if (hook == Hook.LOWERING && hookTime >= LOWER_TIME) hook = Hook.READY
         if (hook == Hook.FALLING) updateFalling(dt)
+        if (streak.active && !isOver) updateStreak(dt)
 
         if (collapsing) {
             collapseV += collapseDir * (1.5f + abs(collapseAngle) * 7f) * dt
@@ -270,7 +276,13 @@ class TowerMode(private val host: ModeHost) : GameMode {
             host.sound.play(SoundManager.PERFECT, perfectPitch(combo))
             host.haptics.perfect(combo)
             val label = if (combo == 1) "PERFECT" else "PERFECT x$combo"
-            host.hud.showCombo(if (abs(assist) > 0.05f) "$label  +BALANCE" else label)
+            host.hud.showCombo(
+                when {
+                    StreakBonus.completes(combo) -> "$label  STREAK!"
+                    abs(assist) > 0.05f -> "$label  +BALANCE"
+                    else -> label
+                }
+            )
             if (theme.calm) {
                 particles.ring(px, py, glow, w * 0.12f)
                 particles.screenMotes(px, py, glow, host.particles(theme, 6), w * 0.08f)
@@ -301,11 +313,82 @@ class TowerMode(private val host: ModeHost) : GameMode {
             host.haptics.warn()
         }
 
-        val newTop = topY + H
+        follow(x, topY + H)
+        if (perfect && StreakBonus.completes(combo)) {
+            streak.start()
+            nextBonus()
+        } else {
+            spawn()
+        }
+    }
+
+    private fun follow(x: Float, newTop: Float) {
         camera.targetY = max(camMin, newTop)
         camera.targetX = x + leanTarget * shiftScale(newTop)
         updateDifficulty()
-        spawn()
+    }
+
+    /** The crane waits empty while the streak's free floors drop straight onto the tower. */
+    private fun nextBonus() {
+        hook = Hook.EMPTY
+        pickLook()
+        bonusX = bonusSpot()
+    }
+
+    private fun updateStreak(dt: Float) {
+        val landed = streak.update(dt)
+        if (landed < 0) return
+        val topY = floors.size * H
+        floors.add(Floor(bonusX, topY, nextColor, nextWindows, floors.isEmpty()))
+        score = floors.size
+        host.hud.onScore()
+        val last = !streak.active
+        host.streakLanded(landed, last)
+
+        val px = sx(bonusX + shiftAt(topY + H / 2f))
+        val py = sy(topY)
+        val glow = Palette.lighten(nextColor, 0.4f)
+        if (theme.calm) {
+            particles.ring(px, py, glow, w * (if (last) 0.2f else 0.1f))
+            particles.screenMotes(px, py, glow, host.particles(theme, if (last) 14 else 4), w * 0.08f)
+        } else {
+            particles.flares(px, py, glow, if (last) 40 else 12, w * (if (last) 0.6f else 0.35f))
+        }
+
+        // Free floors never topple the tower: they land where they steady it most.
+        balance = stability()
+        leanTarget = sign(balance) * min(1f, abs(balance)).pow(1.5f)
+        follow(bonusX, topY + H)
+        if (last) {
+            host.hud.showCombo("+${StreakBonus.STACKS} FLOORS  +${StreakBonus.GEMS} GEMS")
+            camera.shake(w * 0.005f * host.shakeScale(theme), 0.15f)
+            spawn()
+        } else {
+            nextBonus()
+        }
+    }
+
+    /**
+     * Right on top of the last floor, unless the tower is leaning; then up to a few nudges toward
+     * whichever side straightens it most, so a streak always helps.
+     */
+    private fun bonusSpot(): Float {
+        val support = floors.lastOrNull()?.x ?: 0f
+        val topY = floors.size * H
+        var bestX = support
+        var best = Float.MAX_VALUE
+        for (k in BONUS_NUDGES) {
+            val x = support + k * ASSIST
+            floors.add(Floor(x, topY, 0, 0, false))
+            val s = abs(stability())
+            floors.removeAt(floors.lastIndex)
+            if (k == 0 && s <= STEADY) return x
+            if (s < best) {
+                best = s
+                bestX = x
+            }
+        }
+        return bestX
     }
 
     private fun fallOff(offset: Float) {
@@ -337,6 +420,7 @@ class TowerMode(private val host: ModeHost) : GameMode {
 
     private fun endRun(reason: String) {
         hook = Hook.EMPTY
+        streak.cancel()
         isOver = true
         endReason = reason
         overTime = 0f
@@ -387,6 +471,10 @@ class TowerMode(private val host: ModeHost) : GameMode {
     private fun spawn() {
         hook = Hook.LOWERING
         hookTime = 0f
+        pickLook()
+    }
+
+    private fun pickLook() {
         nextColor = Palette.blockColor(theme, floors.size + 1)
         var bits = 0
         for (i in 0 until 6) if (Random.nextFloat() < 0.6f) bits = bits or (1 shl i)
@@ -491,6 +579,11 @@ class TowerMode(private val host: ModeHost) : GameMode {
 
         if (hook == Hook.FALLING && !isOver) {
             drawFloor(canvas, sx(fx), sy(fy), nextColor, nextWindows, floors.isEmpty(), 255, moving = true)
+        }
+        if (streak.active && !isOver) {
+            val top = floors.size * H
+            val y = top + (1f - streak.fall) * BONUS_DROP
+            drawFloor(canvas, sx(bonusX + shiftAt(top + H / 2f)), sy(y), nextColor, nextWindows, false, 255, moving = true)
         }
 
         drawCrane(canvas)
@@ -730,6 +823,12 @@ class TowerMode(private val host: ModeHost) : GameMode {
         const val SWAY_KICK = 0.9f
         const val WOBBLE = 0.04f
         const val ASSIST = W * 0.12f
+        /** Free streak floors stay centered while the tower leans less than this. */
+        const val STEADY = 0.3f
+        /** Sideways nudges, in [ASSIST] steps, tried for a free streak floor; centered first. */
+        val BONUS_NUDGES = intArrayOf(0, -1, 1, -2, 2, -3, 3)
+        /** Height a free streak floor falls from. */
+        const val BONUS_DROP = H * 2.5f
         const val DANGER = 0.7f
         const val LIVES = 3
         const val OVER_TIME = 1.3f

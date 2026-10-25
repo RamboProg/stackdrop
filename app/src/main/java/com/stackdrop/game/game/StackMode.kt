@@ -21,17 +21,20 @@ class StackMode(private val host: ModeHost) : GameMode {
         private set
     override var isOver = false
         private set
-    override val gemsEarned get() = perfects + score / 10
+    override val gemsEarned get() = perfects + score / 10 + streak.gems
     override val isFinished get() = isOver && overTime > FALL_TIME
     override val runStats get() = RunStats(score, (playTime * 1000f).toLong(), drops, perfects, bestCombo, revived)
 
     private val iso = IsoRenderer()
     private val camera = Camera()
     private val particles = Particles()
+    private val streak = StreakBonus()
 
     private val tower = ArrayList<Block>()
     private val debris = ArrayList<Debris>()
     private var moving: Block? = null
+    /** The free streak piece on its way down. */
+    private var bonus: Block? = null
     private var axisX = false
     private var direction = 1f
     private var speed = START_SPEED
@@ -62,6 +65,8 @@ class StackMode(private val host: ModeHost) : GameMode {
         tower.clear()
         debris.clear()
         particles.clear()
+        streak.reset()
+        bonus = null
         score = 0
         combo = 0
         bestCombo = 0
@@ -88,7 +93,7 @@ class StackMode(private val host: ModeHost) : GameMode {
             overTime += dt
         } else {
             playTime += dt
-            moveSlab(dt)
+            if (streak.active) updateStreak(dt) else moveSlab(dt)
         }
 
         val it = debris.iterator()
@@ -106,7 +111,7 @@ class StackMode(private val host: ModeHost) : GameMode {
     }
 
     override fun onTap() {
-        if (!isOver) drop()
+        if (!isOver && !streak.active) drop()
     }
 
     override fun canRevive() = isOver && !revived
@@ -161,6 +166,8 @@ class StackMode(private val host: ModeHost) : GameMode {
             perfects++
             bestCombo = max(bestCombo, combo)
             val grew = combo >= GROW_COMBO && grow(b)
+            val streaking = StreakBonus.completes(combo)
+            if (streaking) streak.start()
 
             host.sound.play(SoundManager.PERFECT, perfectPitch(combo))
             if (grew) host.sound.play(SoundManager.UNLOCK, 1.2f, 0.6f)
@@ -175,7 +182,13 @@ class StackMode(private val host: ModeHost) : GameMode {
             }
 
             val label = if (combo == 1) "PERFECT" else "PERFECT x$combo"
-            host.hud.showCombo(if (grew) "$label  GROW!" else label)
+            host.hud.showCombo(
+                when {
+                    streaking -> "$label  STREAK!"
+                    grew -> "$label  GROW!"
+                    else -> label
+                }
+            )
             place(b)
             return
         }
@@ -235,7 +248,41 @@ class StackMode(private val host: ModeHost) : GameMode {
         speed = min(MAX_SPEED, START_SPEED + score * SPEED_STEP)
         camera.targetY = b.y + b.h + SLAB_H
         host.hud.onScore()
-        spawnNext()
+        if (streak.active) bonus = bonusPiece() else spawnNext()
+    }
+
+    /** A free piece exactly on top of the last one, starting [BONUS_DROP] above it. */
+    private fun bonusPiece(): Block {
+        val top = tower.last()
+        return Block(top.x, top.z, top.w, top.d, top.y + top.h + BONUS_DROP, SLAB_H, Palette.blockColor(theme, score + 1))
+    }
+
+    private fun updateStreak(dt: Float) {
+        val b = bonus ?: return
+        val landed = streak.update(dt)
+        val top = tower.last()
+        val rest = top.y + top.h
+        if (landed < 0) {
+            b.y = rest + (1f - streak.fall) * BONUS_DROP
+            return
+        }
+        b.y = rest
+        bonus = null
+        val last = !streak.active
+        host.streakLanded(landed, last)
+        val glow = Palette.lighten(b.color, 0.4f)
+        if (theme.calm) {
+            particles.ripple(b, if (last) 3 else 1, glow)
+            particles.motes(b, host.particles(theme, if (last) 14 else 4), glow)
+        } else {
+            particles.ripple(b, if (last) 4 else 2, glow)
+            particles.burst(b, host.particles(theme, if (last) 36 else 10), glow)
+        }
+        if (last) {
+            host.hud.showCombo("+${StreakBonus.STACKS} STACKS  +${StreakBonus.GEMS} GEMS")
+            camera.shake(width * 0.005f * host.shakeScale(theme), 0.15f)
+        }
+        place(b)
     }
 
     private fun miss(b: Block, delta: Float) {
@@ -275,6 +322,7 @@ class StackMode(private val host: ModeHost) : GameMode {
             if (iso.isVisible(b, height)) iso.drawBlock(canvas, b, above = tower.getOrNull(i + 1))
         }
         moving?.let { iso.drawBlock(canvas, it, moving = true) }
+        bonus?.let { iso.drawBlock(canvas, it, moving = true) }
         particles.drawWorld(canvas, iso)
         for (d in debris) if (d.depth >= depthRef) d.draw(canvas, iso)
         particles.drawScreen(canvas)
@@ -294,6 +342,8 @@ class StackMode(private val host: ModeHost) : GameMode {
         const val GROW_COMBO = 8
         const val GROW_AMOUNT = 0.7f
         const val DEBRIS_PUSH = 3f
+        /** Height in slabs a free streak piece falls from. */
+        const val BONUS_DROP = 3f
         const val FALL_TIME = 1.1f
         const val MIN_ZOOM = 0.08f
     }
