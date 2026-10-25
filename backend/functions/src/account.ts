@@ -83,6 +83,12 @@ export async function deleteUserData(uid: string): Promise<void> {
   for (const r of [...sent.docs, ...received.docs]) remove(r.ref);
 
   // Board documents may be "missing" (only their entries exist); listDocuments still returns them.
+  const [cooldownsFrom, cooldownsTo] = await Promise.all([
+    db.collection("friendCooldowns").where("from", "==", uid).get(),
+    db.collection("friendCooldowns").where("to", "==", uid).get(),
+  ]);
+  for (const c of [...cooldownsFrom.docs, ...cooldownsTo.docs]) remove(c.ref);
+
   const boards = await db.collection("leaderboards").listDocuments();
   for (const b of boards) remove(b.collection("entries").doc(uid));
 

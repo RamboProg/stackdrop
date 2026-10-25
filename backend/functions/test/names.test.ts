@@ -11,6 +11,8 @@ test("enforces length, characters and spacing", () => {
   assert.deepEqual(checkName("Mo"), { ok: false, reason: "length" });
   assert.deepEqual(checkName("A".repeat(17)), { ok: false, reason: "length" });
   assert.deepEqual(checkName("Mo-92"), { ok: false, reason: "characters" });
+  assert.deepEqual(checkName("__ab__"), { ok: false, reason: "characters" });
+  assert.equal(checkName("__ab").ok, true);
   assert.deepEqual(checkName("Mo😀92"), { ok: false, reason: "characters" });
   assert.deepEqual(checkName("Mo  92"), { ok: false, reason: "spaces" });
 });

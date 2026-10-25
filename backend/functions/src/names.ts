@@ -2,6 +2,8 @@ export const NAME_MIN = 3;
 export const NAME_MAX = 16;
 
 const NAME_CHARS = /^[A-Za-z0-9_ ]+$/;
+/** Firestore reserves document IDs like this, and the lower-case name is a document ID. */
+const RESERVED_ID = /^__.*__$/;
 
 export type NameProblem = "length" | "characters" | "spaces" | "banned";
 
@@ -13,7 +15,7 @@ export type NameCheck =
 export function checkName(raw: string): NameCheck {
   const name = raw.trim();
   if (name.length < NAME_MIN || name.length > NAME_MAX) return { ok: false, reason: "length" };
-  if (!NAME_CHARS.test(name)) return { ok: false, reason: "characters" };
+  if (!NAME_CHARS.test(name) || RESERVED_ID.test(name)) return { ok: false, reason: "characters" };
   if (name.includes("  ")) return { ok: false, reason: "spaces" };
   if (isBanned(name)) return { ok: false, reason: "banned" };
   return { ok: true, name, lower: name.toLowerCase() };

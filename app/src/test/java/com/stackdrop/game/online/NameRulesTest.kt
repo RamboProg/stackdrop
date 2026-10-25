@@ -21,6 +21,7 @@ class NameRulesTest {
         assertNotNull(NameRules.problem("A".repeat(17)))
         assertNotNull(NameRules.problem("Mo-92"))
         assertNotNull(NameRules.problem("Mo  92"))
+        assertNotNull(NameRules.problem("__ab__"))
     }
 
     @Test

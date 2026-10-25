@@ -10,7 +10,8 @@
     "build": "tsc",
     "test": "tsc && node --test \"lib/test/**/*.test.js\"",
     "test:rules": "tsc && firebase emulators:exec --only firestore --project demo-stackdrop \"node --test lib/test/rules.spec.js\"",
-    "test:integration": "tsc && firebase emulators:exec --only firestore,auth --project demo-stackdrop \"node --test --test-concurrency=1 lib/test/integration.spec.js\""
+    "test:integration": "tsc && firebase emulators:exec --only firestore,auth --project demo-stackdrop \"node --test --test-concurrency=1 lib/test/integration.spec.js\"",
+    "test:all": "npm test && npm run test:rules && npm run test:integration"
   },
   "dependencies": {
     "firebase-admin": "14.5.0",

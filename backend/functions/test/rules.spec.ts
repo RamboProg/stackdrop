@@ -1,7 +1,7 @@
 // Firestore security rules tests. They need the Firestore emulator, so run them with
 // `npm run test:rules`, which starts it for the duration of the tests.
 import { assertFails, assertSucceeds, initializeTestEnvironment, RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 import { after, before, beforeEach, test } from "node:test";
 
@@ -76,6 +76,7 @@ test("profiles are public to signed-in players but written only by functions", a
   await assertSucceeds(getDoc(doc(as("bob"), "profiles/alice")));
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "profiles/alice")));
   await assertFails(setDoc(doc(as("alice"), "profiles/alice"), { name: "Hacker" }));
+  await assertFails(getDocs(collection(as("bob"), "profiles")));
 });
 
 test("indexes, private data and leaderboard writes are closed to clients", async () => {

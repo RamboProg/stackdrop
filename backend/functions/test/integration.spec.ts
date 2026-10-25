@@ -119,6 +119,42 @@ test("requests can be accepted or declined", async () => {
   assert.deepEqual(await as("alice")(respondFriendRequest, { fromUid: "cara", accept: true }), { ok: false, reason: "not-found" });
 });
 
+test("a declined player can't ask again for a week", async () => {
+  for (const [uid, name] of [["alice", "Alice"], ["cara", "Cara"]]) await as(uid)(claimName, { name });
+  await as("cara")(sendFriendRequest, { uid: "alice" });
+  await as("alice")(respondFriendRequest, { fromUid: "cara", accept: false });
+
+  const again = await as("cara")(sendFriendRequest, { uid: "alice" });
+  assert.equal(again.ok && again.status, "sent", "looks sent to the sender");
+  assert.equal((await db.doc("friendRequests/cara_alice").get()).exists, false, "but alice isn't asked again");
+
+  // Alice can still ask Cara herself.
+  const back = await as("alice")(sendFriendRequest, { uid: "cara" });
+  assert.equal(back.ok && back.status, "sent");
+  assert.equal((await db.doc("friendRequests/alice_cara").get()).exists, true);
+});
+
+test("uids that aren't plain IDs are refused", async () => {
+  await as("alice")(claimName, { name: "Alice" });
+  await assert.rejects(as("alice")(sendFriendRequest, { uid: "bob/friends/x" }), { code: "invalid-argument" });
+  await assert.rejects(as("alice")(respondFriendRequest, { fromUid: "../x", accept: true }), { code: "invalid-argument" });
+  await assert.rejects(as("alice")(removeFriend, { uid: "a/b" }), { code: "invalid-argument" });
+});
+
+test("renaming updates the visible leaderboard rows and pending requests", async () => {
+  for (const [uid, name] of [["alice", "Alice"], ["bob", "Bob"]]) await as(uid)(claimName, { name });
+  await submit("alice", run({ score: 12 }));
+  await as("alice")(sendFriendRequest, { uid: "bob" });
+
+  await as("alice")(claimName, { name: "Alicia" });
+  await as("alice")(setAvatar, { avatar: 7 });
+
+  const row = (await db.doc("leaderboards/tower_all/entries/alice").get()).data()!;
+  assert.equal(row.name, "Alicia");
+  assert.equal(row.avatar, 7);
+  assert.equal((await db.doc("friendRequests/alice_bob").get()).get("fromName"), "Alicia");
+});
+
 test("submitScore validates, ranks, rate-limits and ignores repeats", async () => {
   await assert.rejects(submit("alice", run()), { code: "failed-precondition" });
   await as("alice")(claimName, { name: "Alice" });

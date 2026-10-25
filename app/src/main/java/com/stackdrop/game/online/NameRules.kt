@@ -14,12 +14,15 @@ object NameRules {
 
     private val NAME = Regex("[A-Za-z0-9_ ]+")
 
+    /** Reserved by Firestore for document IDs; the server refuses these too. */
+    private val RESERVED = Regex("__.*__")
+
     /** Returns a message for the player, or null when the name looks fine. */
     fun problem(raw: String): String? {
         val name = raw.trim()
         return when {
             name.length < MIN || name.length > MAX -> "Names are $MIN to $MAX characters"
-            !NAME.matches(name) -> "Use letters, numbers, spaces or _"
+            !NAME.matches(name) || RESERVED.matches(name) -> "Use letters, numbers, spaces or _"
             "  " in name -> "No double spaces, please"
             else -> null
         }

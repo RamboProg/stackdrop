@@ -1,9 +1,10 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { CALLABLE, db, optionalIntField, payload, requireAuth, stringField, intField } from "./common";
-import { AVATAR_COUNT } from "./config";
+import { AVATAR_COUNT, MODES } from "./config";
 import { defaultAvatar, newFriendCode } from "./codes";
 import { checkName, suggestions } from "./names";
+import { isoWeekId } from "./week";
 
 const NAME_CHANGES_PER_DAY = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -68,7 +69,9 @@ export const claimName = onCall(CALLABLE, async (req): Promise<ClaimResult> => {
       tx.set(privateRef, { nameChanges: [...recent, now], updatedAt: Timestamp.now() }, { merge: true });
       return { ok: true } as const;
     });
-    if (result !== "code-collision") return result;
+    if (result === "code-collision") continue;
+    if (result.ok) await updatePublicCopies(uid, { name: check.name });
+    return result;
   }
   throw new HttpsError("internal", "friend-code-exhausted");
 });
@@ -81,5 +84,25 @@ export const setAvatar = onCall(CALLABLE, async (req): Promise<{ ok: true }> => 
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("failed-precondition", "profile-required");
   await ref.update({ avatar });
+  await updatePublicCopies(uid, { avatar });
   return { ok: true };
 });
+
+/**
+ * Leaderboard rows and pending friend requests copy the name and avatar. After a change, the boards
+ * players can see (all-time and this week) and the requests still waiting show the new ones, so a
+ * name that was changed for being offensive doesn't stay on display.
+ */
+async function updatePublicCopies(uid: string, fields: { name?: string; avatar?: number }): Promise<void> {
+  const week = isoWeekId(new Date());
+  const entries = MODES.flatMap((m) => [`${m}_all`, `${m}_${week}`])
+    .map((board) => db.doc(`leaderboards/${board}/entries/${uid}`));
+  const [rows, requests] = await Promise.all([
+    db.getAll(...entries),
+    fields.name === undefined ? null : db.collection("friendRequests").where("from", "==", uid).get(),
+  ]);
+  const batch = db.batch();
+  for (const row of rows) if (row.exists) batch.update(row.ref, fields);
+  for (const request of requests?.docs ?? []) batch.update(request.ref, { fromName: fields.name });
+  await batch.commit();
+}

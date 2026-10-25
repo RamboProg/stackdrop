@@ -4,8 +4,9 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isMe(uid) { return signedIn() && request.auth.uid == uid; }
 
-    // Public profiles and every index are written only by Cloud Functions (Admin SDK).
-    match /profiles/{uid}            { allow read: if signedIn(); allow write: if false; }
+    // Public profiles and every index are written only by Cloud Functions (Admin SDK). Profiles can
+    // be read one at a time by uid, never listed, so the whole player base can't be downloaded.
+    match /profiles/{uid}            { allow get: if signedIn(); allow list, write: if false; }
     match /usernames/{name}          { allow read, write: if false; }
     match /friendCodes/{code}        { allow read, write: if false; }
     match /private/{uid}             { allow read, write: if false; }

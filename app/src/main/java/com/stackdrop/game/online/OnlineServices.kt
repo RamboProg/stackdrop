@@ -241,7 +241,7 @@ class OnlineServices(context: Context) : OnlineApi {
     }
 
     override fun respondFriendRequest(fromUid: String, accept: Boolean) {
-        friendAction("Friend response") { repo -> repo.respond(fromUid, accept) }
+        friendAction("Friend response") { repo -> repo.respond(fromUid, accept)?.let { events(GameEvent.Toast(it)) } }
     }
 
     override fun removeFriend(uid: String) {

@@ -3,6 +3,9 @@ package com.stackdrop.game.online
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 
 /** Friends, requests and the friends leaderboard. Every change goes through a Cloud Function. */
@@ -38,8 +41,16 @@ class FriendsRepo(private val db: FirebaseFirestore, private val functions: Fire
         }
     }
 
-    suspend fun respond(fromUid: String, accept: Boolean) {
-        functions.getHttpsCallable("respondFriendRequest").call(mapOf("fromUid" to fromUid, "accept" to accept)).await()
+    /** Returns a message when the answer didn't go through, or null when it did. */
+    suspend fun respond(fromUid: String, accept: Boolean): String? {
+        val r = functions.getHttpsCallable("respondFriendRequest")
+            .call(mapOf("fromUid" to fromUid, "accept" to accept)).await().data as? Map<*, *>
+        if (r?.get("ok") == true) return null
+        return when (r?.get("reason")) {
+            "too-many-friends" -> "One of you already has the most friends allowed"
+            "not-found" -> "That request is no longer there"
+            else -> GENERIC_RESPONSE
+        }
     }
 
     suspend fun remove(uid: String) {
@@ -61,21 +72,25 @@ class FriendsRepo(private val db: FirebaseFirestore, private val functions: Fire
         return BoardSnapshot(friendsBoardId(modeId), list, mine?.rank, mine?.score, nowMs, fromCache = false, offline = false)
     }
 
-    private suspend fun profiles(ids: List<String>): List<ProfileSnapshot> =
-        ids.chunked(WHERE_IN_LIMIT).flatMap { chunk ->
-            db.collection("profiles").whereIn(FieldPath.documentId(), chunk).get().await().documents.map { d ->
+    // One read per friend: the rules allow reading a profile by ID but not querying the collection,
+    // so nobody can download every player's profile.
+    private suspend fun profiles(ids: List<String>): List<ProfileSnapshot> = coroutineScope {
+        ids.map { id -> async { db.collection("profiles").document(id).get().await() } }.awaitAll()
+            .filter { it.exists() }
+            .map { d ->
                 val bests = (d.get("bests") as? Map<*, *>).orEmpty()
                     .mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? Number)?.let { key to it.toInt() } } }
                     .toMap()
                 ProfileSnapshot(d.id, d.getString("name") ?: "", d.getLong("avatar")?.toInt() ?: 0,
                     d.getString("friendCode") ?: "", bests)
             }
-        }
+    }
 
     companion object {
         /** Firestore allows at most 30 values in a whereIn. */
         private const val WHERE_IN_LIMIT = 30
         private const val GENERIC = "Couldn't send the request. Try again"
+        private const val GENERIC_RESPONSE = "Couldn't answer the request. Try again"
 
         fun friendsBoardId(modeId: String) = "friends_$modeId"
     }
