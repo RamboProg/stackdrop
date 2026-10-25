@@ -54,9 +54,9 @@ updates it.
 | App info and performance → Crash logs (Crashlytics) | Yes | No | Required | Analytics |
 | App info and performance → Diagnostics (AdMob, Crashlytics) | Yes | Yes | Required | Advertising or marketing, Analytics |
 | Device or other IDs (advertising ID, AdMob; App Check; Crashlytics installation ID) | Yes | Yes | Required | Advertising or marketing, Analytics, Fraud prevention, security and compliance |
-| Financial info → Purchase history (premium, through Google Play) | Yes | No | Optional | App functionality |
 
-Not collected: payment card or bank details (Google Play handles payment), health, messages,
+Not collected: purchase history (whether you own premium stays on the phone; Google Play handles
+the purchase), payment card or bank details, health, messages,
 photos or videos, audio, files, calendar, contacts, precise location, web browsing, installed apps.
 
 "Shared" above means passed to Google for advertising. Data sent to Firebase is processed by Google

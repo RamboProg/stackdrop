@@ -106,16 +106,14 @@ and the row says ACTIVE after buying.
 
 ## Part 4 — Before publishing
 
-1. **Host the privacy policy and deletion page.**
-   - Fill in the bracketed parts of `docs/store/privacy-policy.md` and
-     `docs/store/account-deletion.md` (your name, contact email, date, the deletion URL).
-   - Host both. Easiest options: a free **Google Sites** page, or a separate public GitHub
-     repository with **GitHub Pages** turned on. Don't make the game's own repository public just
-     for this, because it contains `app/google-services.json`.
-   - Put the two addresses in `app/src/main/java/com/stackdrop/game/ui/Links.kt`
-     (`PRIVACY_POLICY` and `ACCOUNT_DELETION`).
+1. **Privacy policy and deletion page** (done): `site/privacy/index.html` and
+   `site/delete-account/index.html` are the only copies, published on Vercel at
+   https://stackdrop-towers.vercel.app/privacy and /delete-account and linked from `ui/Links.kt`.
+   Edit those files and redeploy the site when the data the game collects changes.
    - Use the same privacy URL in Play Console (App content → Privacy policy) and in the AdMob
      consent message.
+   - If you have a business or postal address you're happy to publish, add it to the policy's
+     developer line; some EEA regulators expect one.
 2. **Official Google "G".** The sign-in button draws an approximation
    (`ProfileScreen.googleMark`). Download the official mark from Google's
    [Sign-in branding guidelines](https://developers.google.com/identity/branding-guidelines),

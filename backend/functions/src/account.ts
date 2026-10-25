@@ -2,7 +2,9 @@ import { getAuth } from "firebase-admin/auth";
 import { DocumentReference, Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { CALLABLE, db, payload, requireAuth, stringField } from "./common";
+import { inactiveGuests, UserActivity } from "./retention";
 
 /** How long the deletion marker blocks writes: longer than any ID token issued before deletion lives. */
 const MARKER_TTL_MS = 2 * 60 * 60 * 1000;
@@ -42,6 +44,36 @@ export const deleteGuest = onCall(CALLABLE, async (req): Promise<{ ok: true }> =
   await deleteUserData(guest);
   logger.info("Guest account deleted after switching to Google", { caller, guest });
   return { ok: true };
+});
+
+/**
+ * Data deletion: once a day, guest accounts unused for a year are deleted with everything they own
+ * (see retention.ts). Failures are logged and retried the next day.
+ */
+export const purgeInactiveGuests = onSchedule({ schedule: "every day 03:00", timeZone: "UTC" }, async () => {
+  const now = Date.now();
+  let pageToken: string | undefined;
+  let deleted = 0;
+  do {
+    const page = await getAuth().listUsers(1000, pageToken);
+    pageToken = page.pageToken;
+    const users: UserActivity[] = page.users.map((u) => ({
+      uid: u.uid,
+      providers: u.providerData.map((p) => p.providerId),
+      creationTime: u.metadata.creationTime,
+      lastSignInTime: u.metadata.lastSignInTime,
+      lastRefreshTime: u.metadata.lastRefreshTime,
+    }));
+    for (const uid of inactiveGuests(users, now)) {
+      try {
+        await deleteUserData(uid);
+        deleted++;
+      } catch (e) {
+        logger.error("Inactive guest not deleted; will retry tomorrow", { uid, error: (e as Error).message });
+      }
+    }
+  } while (pageToken);
+  logger.info("Inactive guests deleted", { deleted });
 });
 
 /** Removes every document [uid] owns, then the Auth user. Throws if anything could not be deleted. */
