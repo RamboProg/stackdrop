@@ -1,6 +1,5 @@
 package com.stackdrop.game.game
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -8,7 +7,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
-import androidx.core.content.res.ResourcesCompat
 import com.stackdrop.game.ads.InterstitialPacing
 import com.stackdrop.game.audio.Haptics
 import com.stackdrop.game.audio.SoundManager
@@ -952,18 +950,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         splash.render(canvas, width.toFloat(), height.toFloat())
     }
 
-    @SuppressLint("DiscouragedApi")
-    private fun loadFont(): Typeface {
-        val id = context.resources.getIdentifier("game_font", "font", context.packageName)
-        if (id != 0) {
-            try {
-                ResourcesCompat.getFont(context, id)?.let { return it }
-            } catch (e: Exception) {
-                // fall back to the system font
-            }
-        }
-        return Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-    }
+    private fun loadFont(): Typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
 
     companion object {
         const val RESTART_DELAY = 0.5f

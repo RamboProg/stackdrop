@@ -30,8 +30,11 @@ exist in Play Console, so do this first.
    fresh `google-services.json` into `app/`. Without this, Google sign-in and App Check fail on
    Play-installed copies.
 
-Every later upload needs a higher `versionCode` in `app/build.gradle.kts` (1 → 2 → 3...). Bump
-`versionName` ("1.0" → "1.0.1") whenever players should see a new number.
+Every later upload needs a higher version code: add `stackdrop.versionCode=2` (then 3, 4...) to
+`gradle.properties`. Set `stackdrop.versionName=1.0.1` whenever players should see a new number.
+
+To let Claude build signed bundles, fill in both passwords in `keystore.properties` in the project
+folder (git ignores it). Without it, release builds come out unsigned.
 
 ---
 
@@ -60,6 +63,8 @@ Every later upload needs a higher `versionCode` in `app/build.gradle.kts` (1 →
    stackdrop.admobInterstitialId=ca-app-pub-XXXXXXXXXXXXXXXX/IIIIIIIIII
    ```
    Only **release** builds use these. Debug builds always use Google's test ads.
+   Then **delete the `stackdrop.allowTestAds=true` line** from `gradle.properties`. While it is
+   there, release builds quietly use test ads; without it, a release build fails if any ID is missing.
 8. **app-ads.txt:** AdMob → Apps → your app → **app-ads.txt** shows one line. Put it in a file
    called `app-ads.txt` at the root of the website you list in Play Console (for example
    `https://yoursite.example/app-ads.txt`). AdMob checks it within a day or two.
