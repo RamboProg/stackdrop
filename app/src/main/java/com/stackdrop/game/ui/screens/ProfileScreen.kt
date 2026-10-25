@@ -47,7 +47,9 @@ class ProfileScreen(
         avatarR = u * 11f
         avatarRect.set(w / 2f - avatarR, avatarY - avatarR, w / 2f + avatarR, avatarY + avatarR)
         val nameY = h * 0.3f
-        nameRect.set(u * 10f, nameY - u * 7f, u * 90f, nameY + u * 4f)
+        // Starts below the avatar's "TAP TO CHANGE" label, so tapping the label never opens rename.
+        val nameTop = maxOf(nameY - u * 7f, avatarY + avatarR + u * 5.5f)
+        nameRect.set(u * 10f, nameTop, u * 90f, maxOf(nameY + u * 4f, nameTop + u * 8f))
         choosePill.set(u * 22f, nameRect.top, u * 78f, nameRect.bottom)
         val codeY = h * 0.385f
         copyButton.set(u * 20f, codeY + u * 9f, u * 48f, codeY + u * 18f)
@@ -55,9 +57,10 @@ class ProfileScreen(
         val panelTop = h * 0.61f
         accountPanel.set(u * 7f, panelTop, u * 93f, panelTop + u * 27f)
         accountButton.set(u * 12f, panelTop + u * 14f, u * 88f, panelTop + u * 24f)
-        val deleteY = h * 0.8f
-        deleteButton.set(u * 28f, deleteY, u * 72f, deleteY + u * 8f)
         val row = h * 0.88f
+        // Below the account panel, and above BACK, even on short screens.
+        val deleteY = minOf(maxOf(h * 0.8f, accountPanel.bottom + u * 2f), row - u * 10f)
+        deleteButton.set(u * 28f, deleteY, u * 72f, deleteY + u * 8f)
         backButton.set(u * 30f, row, u * 70f, row + u * 11f)
     }
 
@@ -129,7 +132,7 @@ class ProfileScreen(
         when {
             game.nameBusy -> neon.text(canvas, "Saving…", w / 2f, nameY, u * 5f, dim, 230)
             profile != null -> {
-                neon.glowText(canvas, profile.name, w / 2f, nameY, u * 7f, text, accent)
+                neon.glowText(canvas, profile.name, w / 2f, nameY, neon.fit(profile.name, u * 7f, w - u * 16f), text, accent)
                 neon.text(canvas, "tap to edit", w / 2f, nameY + u * 4f, u * 2.8f, dim, 200)
             }
             online -> widgets.pill(canvas, choosePill, "CHOOSE A NAME", accent2, highlight = true)

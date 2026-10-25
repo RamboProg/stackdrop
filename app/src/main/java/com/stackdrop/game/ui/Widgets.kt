@@ -25,6 +25,12 @@ class Widgets(private val neon: Neon) {
     private var pressed: RectF? = null
     private var pressTime = 0f
 
+    /** Height of a camera cutout at the top of the screen, in px; corner controls sit below it. */
+    var topInset = 0f
+
+    /** The y of the top row of controls (gem counter, gear), kept clear of a cutout. */
+    fun topRowY(): Float = max(h * 0.06f, topInset + u * 4.5f)
+
     /** The smallest comfortable touch target, 48dp. */
     private val minTouch = 48f * Resources.getSystem().displayMetrics.density
 
@@ -123,7 +129,7 @@ class Widgets(private val neon: Neon) {
     private val gemText = NumberText()
 
     fun gems(canvas: Canvas, count: Int, inset: Float = 0f) {
-        val y = h * 0.06f
+        val y = topRowY()
         neon.gem(canvas, w - u * 7f - inset, y - u * 1.6f, u * 2.6f)
         neon.glowText(canvas, gemText.of(count), w - u * 11.5f - inset, y, u * 5f, neon.textColor, Neon.GEM,
             align = Paint.Align.RIGHT)

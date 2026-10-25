@@ -248,7 +248,9 @@ class LeaderboardScreen(
             neon.text(canvas, "${e.rank}", rankX, baseline, u * 3.8f, text, 230)
         }
         avatars.draw(canvas, e.avatar, row.left + u * 14f, row.centerY(), row.height() * 0.33f)
-        neon.text(canvas, e.name, row.left + u * 20f, baseline, u * 3.8f, text, 235, Paint.Align.LEFT)
+        // Room up to the score column.
+        val nameSize = neon.fit(e.name, u * 3.8f, row.width() - u * 38f)
+        neon.text(canvas, e.name, row.left + u * 20f, baseline, nameSize, text, 235, Paint.Align.LEFT)
         neon.text(canvas, "${e.score}", row.right - u * 4f, baseline, u * 4.2f, text, 255, Paint.Align.RIGHT)
     }
 
@@ -284,7 +286,8 @@ class LeaderboardScreen(
 
         val cx = card.centerX()
         avatars.draw(canvas, entry.avatar, cx, card.top + u * 11f, u * 7f)
-        neon.glowText(canvas, entry.name, cx, card.top + u * 25f, u * 5.5f, text, accent)
+        neon.glowText(canvas, entry.name, cx, card.top + u * 25f, neon.fit(entry.name, u * 5.5f, card.width() - u * 10f),
+            text, accent)
         val profile = game.popoverProfile
         if (profile == null && game.popoverFailed) {
             neon.text(canvas, "Couldn't load their scores", cx, card.top + u * 34f, u * 3.6f, dim, 230)

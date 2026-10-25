@@ -195,7 +195,8 @@ class FriendsScreen(
                 is Item.Request -> {
                     neon.panel(canvas, row, u * 2.5f, 140)
                     neon.roundRect(canvas, row, u * 2.5f, accent2, u * 0.3f, 160)
-                    neon.text(canvas, item.request.fromName, row.left + u * 5f, baseline, u * 3.8f, text, 240,
+                    val nameSize = neon.fit(item.request.fromName, u * 3.8f, acceptX() - u * 6f - (row.left + u * 5f))
+                    neon.text(canvas, item.request.fromName, row.left + u * 5f, baseline, nameSize, text, 240,
                         Paint.Align.LEFT)
                     check(canvas, acceptX(), row.centerY(), accent)
                     cross(canvas, declineX(), row.centerY(), dim)
@@ -204,7 +205,9 @@ class FriendsScreen(
                     val f = item.friend
                     neon.panel(canvas, row, u * 2.5f, 140)
                     avatars.draw(canvas, f.avatar, row.left + u * 6f, row.centerY(), row.height() * 0.33f)
-                    neon.text(canvas, f.name, row.left + u * 12f, baseline, u * 3.8f, text, 240, Paint.Align.LEFT)
+                    // Room up to the scores on the right.
+                    val nameSize = neon.fit(f.name, u * 3.8f, row.width() - u * 46f)
+                    neon.text(canvas, f.name, row.left + u * 12f, baseline, nameSize, text, 240, Paint.Align.LEFT)
                     neon.text(canvas, "S ${f.bestStack} · T ${f.bestTower}", row.right - u * 4f, baseline, u * 3.4f,
                         dim, 230, Paint.Align.RIGHT)
                 }

@@ -44,7 +44,19 @@ class Hud(private val game: Game, private val neon: Neon) {
 
     val tapsOnUp get() = screen()?.tapsOnUp == true
 
+    private var width = 0
+    private var height = 0
+
+    /** Lays the screens out again with the top controls below a camera cutout of [px]. */
+    fun setTopInset(px: Float) {
+        if (widgets.topInset == px) return
+        widgets.topInset = px
+        if (width > 0) resize(width, height)
+    }
+
     fun resize(width: Int, height: Int) {
+        this.width = width
+        this.height = height
         val w = width.toFloat()
         val h = height.toFloat()
         val u = w / 100f

@@ -45,9 +45,9 @@ class MenuScreen(
             bx += bw + gapX
         }
 
-        val gearY = h * 0.06f - u * 1.6f
+        val gearY = widgets.topRowY() - u * 1.6f
         settingsButton.set(w - u * 11f, gearY - u * 4.5f, w - u * 2f, gearY + u * 4.5f)
-        val chipY = h * 0.045f
+        val chipY = maxOf(h * 0.045f, widgets.topInset + u * 4.5f)
         profileChip.set(u * 3f, chipY - u * 3.5f, u * 34f, chipY + u * 3.5f)
 
         val cardTop = h * 0.6f
@@ -104,7 +104,7 @@ class MenuScreen(
         val accent = Palette.accent(game.theme)
         val accent2 = Palette.accent2(game.theme)
         val t = game.time
-        val pulse = 0.5f + 0.5f * sin(t * 4f)
+        val pulse = if (game.reduceMotion) 0.5f else 0.5f + 0.5f * sin(t * 4f)
         // Reduce motion keeps the title still.
         val titleTime = if (game.reduceMotion) 0f else t
 
@@ -143,9 +143,9 @@ class MenuScreen(
         val ax = r.left + r.height() / 2f
         avatars.draw(canvas, game.avatar, ax, r.centerY(), ar)
         val name = game.profile?.name ?: "Guest"
-        val label = if (name.length > CHIP_CHARS) name.take(CHIP_CHARS - 1) + "…" else name
-        neon.text(canvas, label, ax + ar + u * 1.8f, r.centerY() + u * 1.2f, u * 3.4f, neon.textColor, 230,
-            Paint.Align.LEFT)
+        val nameX = ax + ar + u * 1.8f
+        neon.text(canvas, name, nameX, r.centerY() + u * 1.2f, neon.fit(name, u * 3.4f, r.right - u * 2f - nameX),
+            neon.textColor, 230, Paint.Align.LEFT)
         if (game.onlineAvailable && game.account.anonymous) {
             neon.dot(canvas, ax + ar * 0.8f, r.centerY() - ar * 0.8f, u * 0.7f, accent2)
         }
@@ -175,9 +175,5 @@ class MenuScreen(
         neon.text(canvas, "BEST ${game.save.best(mode.id)}", r.centerX(), r.top + r.height() * 0.89f, u * 3.6f,
             neon.textColor, 170)
         canvas.restore()
-    }
-
-    private companion object {
-        const val CHIP_CHARS = 10
     }
 }

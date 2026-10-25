@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.provider.Settings
 import com.stackdrop.game.ads.InterstitialPacing
 import com.stackdrop.game.audio.Haptics
 import com.stackdrop.game.audio.SoundManager
@@ -287,6 +288,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private fun handleEvent(event: GameEvent) {
         when (event) {
             is GameEvent.Resize -> resize(event.width, event.height)
+            is GameEvent.TopInset -> hud.setTopInset(event.px.toFloat())
             GameEvent.AppPaused -> pauseRun()
             // While an ad is opening, Back would end a run the ad is about to revive.
             GameEvent.Back -> if (splash.active) splash.skip() else if (!adShowing && !hud.onBack()) backToMenu()
@@ -1031,10 +1033,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     }
 
     private fun applyComfort() {
-        reduceMotion = save.reduceMotion
+        // The in-game setting, or Android's own "Remove animations".
+        reduceMotion = save.reduceMotion || systemAnimationsOff()
         host.reduceMotion = reduceMotion
         backdrop.reduceMotion = reduceMotion
     }
+
+    private fun systemAnimationsOff(): Boolean =
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 
     private fun celebrate(count: Int) {
         confetti.confetti(width.toFloat(), host.particles(theme, count), if (theme.calm) confettiColors else null)

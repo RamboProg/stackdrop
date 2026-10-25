@@ -72,6 +72,9 @@ sealed class GameEvent {
     /** The app went to the background; a run in progress pauses. */
     data object AppPaused : GameEvent()
 
+    /** Height in px of a camera cutout at the top of the screen; controls keep below it. */
+    data class TopInset(val px: Int) : GameEvent()
+
     /** The surface changed size while the game thread was running. */
     data class Resize(val width: Int, val height: Int) : GameEvent()
 }

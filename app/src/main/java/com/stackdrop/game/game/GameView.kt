@@ -5,6 +5,8 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.stackdrop.game.online.OnlineApi
 import com.stackdrop.game.platform.PlatformBridge
 
@@ -16,6 +18,10 @@ class GameView(context: Context, bridge: PlatformBridge, online: OnlineApi) : Su
     init {
         holder.addCallback(this)
         isFocusable = true
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            game.post(GameEvent.TopInset(insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top))
+            insets
+        }
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) = Unit

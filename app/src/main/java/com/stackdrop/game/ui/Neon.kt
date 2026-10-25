@@ -188,6 +188,12 @@ class Neon(font: Typeface) {
         return textPaint.measureText(s)
     }
 
+    /** [size], shrunk just enough for [s] to fit in [maxWidth]; names can be 16 wide capitals. */
+    fun fit(s: String, size: Float, maxWidth: Float): Float {
+        val width = measure(s, size)
+        return if (width <= maxWidth || width <= 0f) size else size * maxWidth / width
+    }
+
     private fun passes() = if (soft) 2 else PASSES
 
     private fun cornerRadius(r: RectF, radius: Float) =

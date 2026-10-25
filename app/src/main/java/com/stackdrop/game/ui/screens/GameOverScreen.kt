@@ -63,7 +63,7 @@ class GameOverScreen(private val game: Game, private val neon: Neon, private val
         val accent = Palette.accent(game.theme)
         val accent2 = Palette.accent2(game.theme)
         val t = game.stateTime
-        val pulse = 0.5f + 0.5f * sin(t * 5f)
+        val pulse = if (game.reduceMotion) 0.5f else 0.5f + 0.5f * sin(t * 5f)
         val mode = game.mode
         val top = h * 0.09f
 

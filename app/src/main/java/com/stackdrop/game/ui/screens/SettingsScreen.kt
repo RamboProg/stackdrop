@@ -43,14 +43,17 @@ class SettingsScreen(private val game: Game, private val neon: Neon, private val
         this.w = w
         this.h = h
         this.u = u
-        val rowH = min(h * 0.07f, u * 12.5f)
         val gap = u * 2f
-        var y = h * 0.2f
+        val top = h * 0.2f
+        val row = h * 0.88f
+        // Rows shrink on short screens (tablets, split screen) so the last one never reaches BACK.
+        val fit = (row - gap * 2f - top - gap * (rects.size - 1)) / rects.size
+        val rowH = minOf(h * 0.07f, u * 12.5f, fit)
+        var y = top
         for (r in rects) {
             r.set(u * 7f, y, u * 93f, y + rowH)
             y += rowH + gap
         }
-        val row = h * 0.88f
         backButton.set(u * 30f, row, u * 70f, row + u * 11f)
     }
 
