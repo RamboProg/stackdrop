@@ -42,6 +42,9 @@ interface OnlineApi {
     /** Posts the cached board right away when there is one, then a fresh copy unless it is under a minute old. */
     fun loadBoard(id: String)
 
+    /** Marks the start of a run on the server. Offline, the run can't be ranked later. */
+    fun startRun(runId: String, modeId: String)
+
     /** Sends queued runs one at a time; each result comes back as RunSubmitted or RunDropped. */
     fun submitRuns(runs: List<PendingRun>)
 
@@ -198,6 +201,12 @@ class OnlineServices(context: Context) : OnlineApi {
                 events(GameEvent.BoardLoaded(cached?.copy(offline = true) ?: BoardSnapshot.offlineEmpty(id)))
             }
         }
+    }
+
+    override fun startRun(runId: String, modeId: String) {
+        val repo = boards ?: return
+        if (auth?.uid == null) return
+        scope.launch { runLogged("Run start") { repo.startRun(runId, modeId) } }
     }
 
     override fun submitRuns(runs: List<PendingRun>) {

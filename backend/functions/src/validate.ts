@@ -5,7 +5,7 @@ export const MAX_SCORE = 5000;
 /** Fastest believable time per drop, tuned from real play. */
 export const MIN_DROP_MS: Record<Mode, number> = { stack: 220, tower: 650 };
 
-const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
+export const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
 
 export interface RunInput {
   mode: Mode;

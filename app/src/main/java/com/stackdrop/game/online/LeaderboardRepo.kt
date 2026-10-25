@@ -82,6 +82,11 @@ class LeaderboardRepo(
         return board
     }
 
+    /** Tells the server a run began, on its clock; only runs started this way can be ranked. */
+    suspend fun startRun(runId: String, modeId: String) {
+        functions.getHttpsCallable("startRun").call(mapOf("runId" to runId, "mode" to modeId)).await()
+    }
+
     suspend fun submit(run: PendingRun): Submit {
         val s = run.stats
         val data = mapOf(

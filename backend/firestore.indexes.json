@@ -11,6 +11,12 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "runs",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "deleted",
       "fieldPath": "expireAt",
       "ttl": true,

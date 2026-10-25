@@ -7,8 +7,10 @@ import { getAuth } from "firebase-admin/auth";
 import { Timestamp } from "firebase-admin/firestore";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../src/common";
+import { isoWeekId } from "../src/week";
 import {
-  claimName, deleteAccount, deleteGuest, removeFriend, respondFriendRequest, sendFriendRequest, setAvatar, submitScore,
+  claimName, deleteAccount, deleteGuest, removeFriend, respondFriendRequest, sendFriendRequest, setAvatar, startRun,
+  submitScore,
 } from "../src/index";
 
 type Callable<T> = { run: (req: CallableRequest<unknown>) => T };
@@ -22,6 +24,17 @@ const run = (over: Record<string, unknown> = {}) => ({
   mode: "tower", score: 12, durationMs: 60_000, drops: 15, perfects: 4, bestCombo: 2, revived: false,
   runId: `run-${Math.random().toString(36).slice(2, 12)}`, ...over,
 });
+
+type Run = ReturnType<typeof run>;
+
+/** Records the run as started on the server long enough ago to cover its duration, then submits it. */
+async function submit(uid: string, r: Run) {
+  const ref = db.doc(`runs/${r.runId}`);
+  if (!(await ref.get()).exists) {
+    await ref.set({ uid, mode: r.mode, used: false, startedAt: Timestamp.fromMillis(Date.now() - r.durationMs - 1_000) });
+  }
+  return as(uid)(submitScore, r);
+}
 
 async function clearFirestore(): Promise<void> {
   for (const c of await db.listCollections()) await db.recursiveDelete(c);
@@ -107,12 +120,12 @@ test("requests can be accepted or declined", async () => {
 });
 
 test("submitScore validates, ranks, rate-limits and ignores repeats", async () => {
-  await assert.rejects(as("alice")(submitScore, run()), { code: "failed-precondition" });
+  await assert.rejects(submit("alice", run()), { code: "failed-precondition" });
   await as("alice")(claimName, { name: "Alice" });
   await as("bob")(claimName, { name: "Bob" });
 
   const first = run({ score: 12 });
-  const r1 = await as("alice")(submitScore, first);
+  const r1 = await submit("alice", first);
   assert.equal(r1.newAllTime, true);
   assert.equal(r1.newWeekly, true);
   assert.equal(r1.weeklyRank, 1);
@@ -121,28 +134,69 @@ test("submitScore validates, ranks, rate-limits and ignores repeats", async () =
   assert.equal(entry.name, "Alice");
   assert.equal((await db.doc("profiles/alice").get()).get("bests.tower"), 12);
 
-  await assert.rejects(as("alice")(submitScore, run({ score: 13, drops: 16 })), { code: "resource-exhausted" });
+  await assert.rejects(submit("alice", run({ score: 13, drops: 16 })), { code: "resource-exhausted" });
   await forgetLastSubmit("alice");
-  const repeat = await as("alice")(submitScore, first);
+  const repeat = await submit("alice", first);
   assert.equal(repeat.duplicate, true);
 
   await forgetLastSubmit("alice");
-  const lower = await as("alice")(submitScore, run({ score: 5 }));
+  const lower = await submit("alice", run({ score: 5 }));
   assert.equal(lower.newAllTime, false);
   assert.equal((await db.doc("leaderboards/tower_all/entries/alice").get()).get("score"), 12);
 
-  await as("bob")(submitScore, run({ score: 20, drops: 24 }));
+  await submit("bob", run({ score: 20, drops: 24 }));
   await forgetLastSubmit("alice");
-  const ranked = await as("alice")(submitScore, run({ score: 11 }));
+  const ranked = await submit("alice", run({ score: 11 }));
   assert.equal(ranked.weeklyRank, 2);
 
   await forgetLastSubmit("alice");
-  await assert.rejects(as("alice")(submitScore, run({ score: 30, drops: 30, durationMs: 1_000 })), { code: "invalid-argument" });
-  await assert.rejects(as("alice")(submitScore, run({ score: 40, drops: 20 })), { code: "invalid-argument" });
+  await assert.rejects(submit("alice", run({ score: 30, drops: 30, durationMs: 1_000 })), { code: "invalid-argument" });
+  await assert.rejects(submit("alice", run({ score: 40, drops: 20 })), { code: "invalid-argument" });
 
   await forgetLastSubmit("alice");
-  await as("alice")(submitScore, run({ score: 40, drops: 40, perfects: 40, bestCombo: 40, durationMs: 120_000 }));
+  await submit("alice", run({ score: 40, drops: 40, perfects: 40, bestCombo: 40, durationMs: 120_000 }));
   assert.equal((await db.doc("private/alice").get()).get("flags"), 1, "nearly perfect run is flagged");
+});
+
+test("only runs started on the server, long enough ago, reach the boards", async () => {
+  await as("alice")(claimName, { name: "Alice" });
+
+  const offline = run({ score: 30, drops: 40 });
+  await assert.rejects(as("alice")(submitScore, offline), { code: "invalid-argument", message: "unknown-run" });
+
+  const live = run({ score: 30, drops: 40 });
+  assert.deepEqual(await as("alice")(startRun, { runId: live.runId, mode: "tower" }), { ok: true });
+  const started = (await db.doc(`runs/${live.runId}`).get()).data()!;
+  assert.equal(started.uid, "alice");
+  assert.equal(started.used, false);
+  await assert.rejects(as("alice")(startRun, { runId: live.runId, mode: "tower" }), { code: "already-exists" });
+  // Claims a minute of play a moment after starting: the server clock disagrees.
+  await assert.rejects(as("alice")(submitScore, live), { code: "invalid-argument", message: "clock-mismatch" });
+
+  const stolen = run({ score: 30, drops: 40 });
+  await startedBy("bob", stolen);
+  await assert.rejects(as("alice")(submitScore, stolen), { code: "invalid-argument", message: "unknown-run" });
+
+  const once = run({ score: 30, drops: 40 });
+  await submit("alice", once);
+  await db.doc("private/alice").update({ recentRunIds: [], lastSubmitAt: Timestamp.fromMillis(0) });
+  await assert.rejects(as("alice")(submitScore, once), { code: "invalid-argument", message: "run-used" });
+});
+
+/** Records [r] as started by [uid] (long ago) without submitting it. */
+async function startedBy(uid: string, r: Run): Promise<void> {
+  await db.doc(`runs/${r.runId}`).set({ uid, mode: r.mode, used: false, startedAt: Timestamp.fromMillis(0) });
+}
+
+test("a run sent late counts in the week it was played", async () => {
+  await as("alice")(claimName, { name: "Alice" });
+  const r = run({ score: 9 });
+  // Started two weeks ago and lasted a minute.
+  const startedAt = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  await db.doc(`runs/${r.runId}`).set({ uid: "alice", mode: "tower", used: false, startedAt: Timestamp.fromMillis(startedAt) });
+  const res = await as("alice")(submitScore, r);
+  assert.equal(res.week, isoWeekId(new Date(startedAt + r.durationMs)));
+  assert.notEqual(res.week, isoWeekId(new Date()));
 });
 
 test("deleteAccount removes everything the player owns", async () => {
@@ -154,7 +208,7 @@ test("deleteAccount removes everything the player owns", async () => {
   await as("alice")(sendFriendRequest, { uid: "bob" });
   await as("bob")(sendFriendRequest, { uid: "alice" });
   await as("cara")(sendFriendRequest, { uid: "alice" });
-  await as("alice")(submitScore, run());
+  await submit("alice", run());
   await db.doc("users/alice").set({ rev: 1, gems: 5 });
 
   assert.deepEqual(await as("alice")(deleteAccount), { ok: true });
@@ -168,6 +222,7 @@ test("deleteAccount removes everything the player owns", async () => {
   assert.equal((await db.doc("profiles/bob").get()).exists, true, "other players are untouched");
   await assert.rejects(getAuth().getUser("alice"), { code: "auth/user-not-found" });
   assert.equal((await db.doc("deleted/alice").get()).exists, true, "marker blocks late cloud-save writes");
+  assert.equal((await db.collection("runs").where("uid", "==", "alice").get()).size, 0, "started runs are gone");
 });
 
 /** A real anonymous account on the Auth emulator, with the ID token the app would hold. */

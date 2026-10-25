@@ -401,9 +401,12 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         online.submitRuns(save.pendingRuns)
     }
 
+    /** Identifies the current run to the server, from its start (startRun) to its score. */
+    private var runId = ""
+
     private fun queueRun() {
         if (mode.score <= 0) return
-        val run = PendingRun(mode.id, UUID.randomUUID().toString(), mode.runStats)
+        val run = PendingRun(mode.id, runId, mode.runStats)
         lastRunId = run.runId
         save.pendingRuns = PendingRuns.add(save.pendingRuns, run)
         flushRuns()
@@ -660,6 +663,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     private fun beginMode(m: GameMode) {
         mode = m
         save.lastMode = m.id
+        runId = UUID.randomUUID().toString()
+        if (online.available) online.startRun(runId, m.id)
         m.reset(theme)
         confetti.clear()
         reviveUsed = false
