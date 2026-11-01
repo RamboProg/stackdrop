@@ -28,8 +28,8 @@ val testRewarded = "ca-app-pub-3940256099942544/5224354917"
 val testInterstitial = "ca-app-pub-3940256099942544/1033173712"
 val testBanner = "ca-app-pub-3940256099942544/9214589741"
 val allowTestAds = providers.gradleProperty("stackdrop.allowTestAds").orElse("false").get().toBoolean()
-val adIdNames = listOf("stackdrop.admobAppId", "stackdrop.admobRewardedId", "stackdrop.admobInterstitialId",
-    "stackdrop.admobBannerId")
+val adIdNames = listOf("stackdrop.admobAppId", "stackdrop.admobRewardedId", "stackdrop.admobRewardedHighId",
+    "stackdrop.admobInterstitialId", "stackdrop.admobInterstitialHighId", "stackdrop.admobBannerId")
 val missingAdIds = adIdNames.filter { !providers.gradleProperty(it).isPresent }
 fun adProperty(name: String, test: String) = providers.gradleProperty(name).orElse(test).get()
 
@@ -79,7 +79,9 @@ android {
             buildConfigField("String", "EMULATOR_HOST", "\"$emulatorHost\"")
             manifestPlaceholders["admobAppId"] = testAppId
             buildConfigField("String", "AD_REWARDED_ID", "\"$testRewarded\"")
+            buildConfigField("String", "AD_REWARDED_HIGH_ID", "\"$testRewarded\"")
             buildConfigField("String", "AD_INTERSTITIAL_ID", "\"$testInterstitial\"")
+            buildConfigField("String", "AD_INTERSTITIAL_HIGH_ID", "\"$testInterstitial\"")
             buildConfigField("String", "AD_BANNER_ID", "\"$testBanner\"")
             buildConfigField("boolean", "CONSENT_DEBUG_EEA", consentDebugEea)
             manifestPlaceholders["crashlyticsEnabled"] = crashlyticsDebug
@@ -89,8 +91,12 @@ android {
             buildConfigField("String", "EMULATOR_HOST", "\"\"")
             manifestPlaceholders["admobAppId"] = adProperty("stackdrop.admobAppId", testAppId)
             buildConfigField("String", "AD_REWARDED_ID", "\"${adProperty("stackdrop.admobRewardedId", testRewarded)}\"")
+            buildConfigField("String", "AD_REWARDED_HIGH_ID",
+                "\"${adProperty("stackdrop.admobRewardedHighId", testRewarded)}\"")
             buildConfigField("String", "AD_INTERSTITIAL_ID",
                 "\"${adProperty("stackdrop.admobInterstitialId", testInterstitial)}\"")
+            buildConfigField("String", "AD_INTERSTITIAL_HIGH_ID",
+                "\"${adProperty("stackdrop.admobInterstitialHighId", testInterstitial)}\"")
             buildConfigField("String", "AD_BANNER_ID", "\"${adProperty("stackdrop.admobBannerId", testBanner)}\"")
             buildConfigField("boolean", "CONSENT_DEBUG_EEA", "false")
             manifestPlaceholders["crashlyticsEnabled"] = "true"

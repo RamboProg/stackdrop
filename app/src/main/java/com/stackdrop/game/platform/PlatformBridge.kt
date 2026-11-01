@@ -14,10 +14,11 @@ interface PlatformBridge {
     fun share(text: String)
     fun copyToClipboard(text: String)
     fun openUrl(url: String)
-    fun showRewarded(placement: RewardPlacement)
+    /** [highValue] picks the high-floor ad unit; check [highRewardedReady] first. */
+    fun showRewarded(placement: RewardPlacement, highValue: Boolean = false)
 
     /** Shows the preloaded interstitial; the game has already applied the pacing rules. */
-    fun maybeShowInterstitial()
+    fun maybeShowInterstitial(highValue: Boolean = false)
     fun showPrivacyOptions()
 
     /** Mutes ad audio when the game's sound is off. */
@@ -28,7 +29,9 @@ interface PlatformBridge {
 
     /** Safe to call every frame from the game thread. */
     fun rewardedReady(): Boolean
+    fun highRewardedReady(): Boolean
     fun interstitialReady(): Boolean
+    fun highInterstitialReady(): Boolean
     fun privacyOptionsRequired(): Boolean
     fun exitToHome()
 }

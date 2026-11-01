@@ -240,7 +240,8 @@ by itself.
 
 **AdMob setup (once):**
 1. In [AdMob](https://admob.google.com): **Apps → Add app** (Android, link it to the Play listing
-   once it exists). Create three ad units: **Banner** (adaptive), **Rewarded** and **Interstitial**.
+   once it exists). Create five ad units: **Banner** (adaptive), **Rewarded**, **Interstitial**, and
+   a second **Rewarded** and **Interstitial** with a high eCPM floor for high value moments.
    Fill in **Payments** (tax info and bank account) so AdMob can pay you.
 2. **Privacy & messaging → GDPR → Create message** for the app and publish it. Without it the
    consent form cannot appear for EEA/UK players and they will not get ads.
@@ -250,7 +251,9 @@ by itself.
    stackdrop.admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
    stackdrop.admobBannerId=ca-app-pub-XXXXXXXXXXXXXXXX/BBBBBBBBBB
    stackdrop.admobRewardedId=ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ
+   stackdrop.admobRewardedHighId=ca-app-pub-XXXXXXXXXXXXXXXX/HHHHHHHHHH
    stackdrop.admobInterstitialId=ca-app-pub-XXXXXXXXXXXXXXXX/WWWWWWWWWW
+   stackdrop.admobInterstitialHighId=ca-app-pub-XXXXXXXXXXXXXXXX/JJJJJJJJJJ
    ```
 4. Publish `app-ads.txt` on your developer website (AdMob shows the exact line).
 
@@ -269,8 +272,10 @@ Premium players have no banner and no interstitials.
 4. Lose a run with a score of 10 or more: "Keep going?" with a 5-second ring. Watch the ad and the
    run continues (Tower: two floors fewer after a collapse, or one life back). **No thanks** goes
    to game over. Offered once per run.
-5. Interstitials only appear when starting a new run after at least 8 runs in total, 3 minutes into
-   the session, 4 runs and 4 minutes since the last full-screen ad, and not after a new best.
+5. Interstitials only appear when starting a new run, after a run below score 10 or every 5th run
+   in a row of 10 or more per mode. They need at least 8 runs in total, 60 seconds since the last
+   interstitial, and no rewarded ad since the last run started. Skipping "Keep going?" on a fresh
+   new best gives a high value interstitial, then the next 3 runs below 10 show none.
 
 **Release builds:** R8 removes unused code, and one library rule needed fixing
 (`app/src/main/keepRules/stackdrop.keep`). After changing dependencies, build a release

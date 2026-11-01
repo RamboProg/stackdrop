@@ -1,46 +1,83 @@
 package com.stackdrop.game.ads
 
+/** The interstitial to show in front of the next run, if any. */
+enum class BetweenRunsAd { NONE, NORMAL, HIGH_VALUE }
+
 /**
- * When a between-runs interstitial may appear. All rules must hold: the player is starting a new run
- * after a finished one, at least [RUNS_BETWEEN] runs and [GAP_MS] since the last full-screen ad of
- * any kind (so never soon after a rewarded ad), [MIN_TOTAL_RUNS] runs ever, a session of at least
- * [MIN_SESSION_MS], the last run was not a new best, and an ad is already loaded.
+ * Which between-runs interstitial the player owes, and whether it may appear yet. A run below
+ * [SUCCESS_SCORE] owes one, and so does every [SUCCESSES_BETWEEN]th run in a row at or above it,
+ * counted per mode. Skipping the second chance on a fresh new best owes a high value one and then
+ * spares the next [GRACE_RUNS] runs below [SUCCESS_SCORE].
+ *
+ * An owed ad shows when the player starts a run, once there are [MIN_TOTAL_RUNS] runs ever, [GAP_MS]
+ * since the last interstitial, no rewarded ad since the last run started, and an ad already loaded.
  */
 class InterstitialPacing(private val clock: () -> Long) {
 
     /** Off for players who bought Remove Ads. */
     var enabled = true
 
-    private val sessionStart = clock()
-    private var runsSinceAd = 0
-    private var lastFullScreenAt: Long? = null
+    private val successStreaks = HashMap<String, Int>()
+    private var adOwed = false
+    private var highValueOwed = false
+    private var graceLeft = 0
+    private var rewardedSinceRunStart = false
+    private var lastInterstitialAt: Long? = null
 
-    fun onRunEnded() {
-        runsSinceAd++
+    fun onRunStarted() {
+        rewardedSinceRunStart = false
+    }
+
+    fun onRunEnded(modeId: String, score: Int, skippedBestRevive: Boolean) {
+        if (score >= SUCCESS_SCORE) {
+            val streak = (successStreaks[modeId] ?: 0) + 1
+            if (streak >= SUCCESSES_BETWEEN) adOwed = true
+            successStreaks[modeId] = streak % SUCCESSES_BETWEEN
+        } else {
+            successStreaks[modeId] = 0
+            if (graceLeft > 0) graceLeft-- else adOwed = true
+        }
+        if (skippedBestRevive) highValueOwed = true
     }
 
     fun onFullScreenShown(interstitial: Boolean) {
-        lastFullScreenAt = clock()
-        if (interstitial) runsSinceAd = 0
+        if (interstitial) {
+            lastInterstitialAt = clock()
+            adOwed = false
+        } else {
+            rewardedSinceRunStart = true
+        }
     }
 
-    fun shouldShow(totalRuns: Int, lastRunWasNewBest: Boolean, adLoaded: Boolean): Boolean {
-        val now = clock()
-        val last = lastFullScreenAt
-        return enabled &&
-            adLoaded &&
-            !lastRunWasNewBest &&
-            runsSinceAd >= RUNS_BETWEEN &&
+    /** Called as a run is about to start. A high value ad is offered once; grace begins either way. */
+    fun pick(totalRuns: Int, normalLoaded: Boolean, highLoaded: Boolean): BetweenRunsAd {
+        val highValue = highValueOwed
+        val owed = adOwed || highValue
+        if (highValue) {
+            highValueOwed = false
+            adOwed = false
+            graceLeft = GRACE_RUNS
+        }
+        val last = lastInterstitialAt
+        val allowed = enabled &&
+            owed &&
+            !rewardedSinceRunStart &&
             totalRuns >= MIN_TOTAL_RUNS &&
-            now - sessionStart >= MIN_SESSION_MS &&
-            (last == null || now - last >= GAP_MS)
+            (last == null || clock() - last >= GAP_MS)
+        return when {
+            !allowed -> BetweenRunsAd.NONE
+            highValue && highLoaded -> BetweenRunsAd.HIGH_VALUE
+            normalLoaded -> BetweenRunsAd.NORMAL
+            else -> BetweenRunsAd.NONE
+        }
     }
 
     companion object {
         // Candidates for Remote Config later.
-        const val RUNS_BETWEEN = 4
-        const val GAP_MS = 4 * 60_000L
+        const val SUCCESS_SCORE = 10
+        const val SUCCESSES_BETWEEN = 5
+        const val GRACE_RUNS = 3
+        const val GAP_MS = 60_000L
         const val MIN_TOTAL_RUNS = 8
-        const val MIN_SESSION_MS = 3 * 60_000L
     }
 }

@@ -57,12 +57,12 @@ class ActivityBridge(
         }
     }
 
-    override fun showRewarded(placement: RewardPlacement) {
-        ads.showRewarded(placement)
+    override fun showRewarded(placement: RewardPlacement, highValue: Boolean) {
+        ads.showRewarded(placement, highValue)
     }
 
-    override fun maybeShowInterstitial() {
-        ads.showInterstitial()
+    override fun maybeShowInterstitial(highValue: Boolean) {
+        ads.showInterstitial(highValue)
     }
 
     override fun showPrivacyOptions() = onUi {
@@ -81,7 +81,11 @@ class ActivityBridge(
 
     override fun rewardedReady() = ads.rewardedReady
 
+    override fun highRewardedReady() = ads.highRewardedReady
+
     override fun interstitialReady() = ads.interstitialReady
+
+    override fun highInterstitialReady() = ads.highInterstitialReady
 
     override fun privacyOptionsRequired() = privacyRequired
 

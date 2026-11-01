@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.provider.Settings
+import com.stackdrop.game.ads.BetweenRunsAd
 import com.stackdrop.game.ads.InterstitialPacing
 import com.stackdrop.game.audio.Haptics
 import com.stackdrop.game.audio.SoundManager
@@ -704,16 +705,20 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
     /** Starts a run, first showing an interstitial when the pacing rules allow one. */
     fun startMode(m: GameMode) {
         sound.play(SoundManager.BUTTON)
-        if (!adShowing && pacing.shouldShow(save.gamesPlayed, newBest, bridge.interstitialReady())) {
+        val ad = if (adShowing) BetweenRunsAd.NONE else {
+            pacing.pick(save.gamesPlayed, bridge.interstitialReady(), bridge.highInterstitialReady())
+        }
+        if (ad != BetweenRunsAd.NONE) {
             pendingStart = m
             beginAd()
-            bridge.maybeShowInterstitial()
+            bridge.maybeShowInterstitial(highValue = ad == BetweenRunsAd.HIGH_VALUE)
             return
         }
         beginMode(m)
     }
 
     private fun beginMode(m: GameMode) {
+        pacing.onRunStarted()
         mode = m
         save.lastMode = m.id
         runId = UUID.randomUUID().toString()
@@ -739,19 +744,25 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
 
     val privacyOptionsRequired get() = bridge.privacyOptionsRequired()
 
+    /** The run in progress beats the mode's best; [endRun] is what makes it the new best. */
+    private val freshBest get() = mode.score > save.best(mode.id)
+
+    private val highValueRevive get() = freshBest && bridge.highRewardedReady()
+
     private fun canOfferRevive() =
-        !reviveUsed && mode.score >= REVIVE_MIN_SCORE && mode.canRevive() && bridge.rewardedReady()
+        !reviveUsed && mode.score >= REVIVE_MIN_SCORE && mode.canRevive() &&
+            (highValueRevive || bridge.rewardedReady())
 
     fun acceptRevive() {
         if (!reviveOffered || adShowing) return
         reviveUsed = true
-        showRewarded(RewardPlacement.SECOND_CHANCE)
+        showRewarded(RewardPlacement.SECOND_CHANCE, highValue = highValueRevive)
     }
 
     fun declineRevive() {
         reviveLeft = -1f
         reviveUsed = true
-        endRun()
+        endRun(skippedRevive = true)
     }
 
     fun watchForDoubleGems() {
@@ -786,10 +797,10 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         }
     }
 
-    private fun showRewarded(placement: RewardPlacement) {
+    private fun showRewarded(placement: RewardPlacement, highValue: Boolean = false) {
         earned = null
         beginAd()
-        bridge.showRewarded(placement)
+        bridge.showRewarded(placement, highValue)
     }
 
     private fun beginAd() {
@@ -811,7 +822,7 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
                     mode.revive()
                     rewardFeedback()
                 } else {
-                    endRun()
+                    endRun(skippedRevive = true)
                 }
             }
             RewardPlacement.DOUBLE_GEMS -> if (rewarded) {
@@ -864,8 +875,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         endRun()
     }
 
-    private fun endRun() {
-        pacing.onRunEnded()
+    private fun endRun(skippedRevive: Boolean = false) {
+        pacing.onRunEnded(mode.id, mode.score, skippedBestRevive = skippedRevive && freshBest)
         setState(State.GAME_OVER)
         gemsEarned = mode.gemsEarned * (if (premium) PREMIUM_GEM_MULTIPLIER else 1)
         save.gems += gemsEarned

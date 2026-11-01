@@ -44,23 +44,31 @@ folder (git ignores it). Without it, release builds come out unsigned.
 2. **Apps → Add app → Android**. Say the app is **not** published yet (link it to the Play listing
    later, under App settings, once the store page is live).
 3. Copy the **App ID** (`ca-app-pub-…~…`).
-4. **Ad units → Add ad unit**, three times:
+4. **Ad units → Add ad unit**, five times:
    - **Banner** (name it "Bottom banner").
    - **Rewarded** ("Rewarded"). Leave the reward settings at their defaults; the game decides the
      reward itself.
    - **Interstitial** ("Between runs").
+   - **Rewarded** ("Rewarded high value"), used for "Keep going?" on a fresh new best.
+   - **Interstitial** ("Between runs high value"), used after a player skips that offer.
+   On both high value units, find the **eCPM floor** setting and choose a high floor. The exact
+   labels vary, so pick the highest Google-optimized option or set a manual floor. A higher
+   floor means the unit shows less often (the game falls back to the normal unit), it applies to the
+   AdMob network only, and a new unit can take a week or more to apply it accurately.
    Copy each ad unit ID (`ca-app-pub-…/…`).
 5. **Payments:** AdMob → **Payments → Payments info**. Fill in your address, tax information and
    bank account. Payment arrives once you pass the payment threshold (US$100 or local equivalent).
 6. **Consent message:** **Privacy & messaging → European regulations → Create message**. Choose
    the app, your privacy policy URL (Part 4), languages, then **Publish**. Without a published
    message, players in the EEA, UK and Switzerland get no ads at all.
-7. Put the four IDs in the project's `gradle.properties`:
+7. Put the six IDs in the project's `gradle.properties`:
    ```
    stackdrop.admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
    stackdrop.admobBannerId=ca-app-pub-XXXXXXXXXXXXXXXX/BBBBBBBBBB
    stackdrop.admobRewardedId=ca-app-pub-XXXXXXXXXXXXXXXX/RRRRRRRRRR
+   stackdrop.admobRewardedHighId=ca-app-pub-XXXXXXXXXXXXXXXX/HHHHHHHHHH
    stackdrop.admobInterstitialId=ca-app-pub-XXXXXXXXXXXXXXXX/IIIIIIIIII
+   stackdrop.admobInterstitialHighId=ca-app-pub-XXXXXXXXXXXXXXXX/JJJJJJJJJJ
    ```
    Only **release** builds use these. Debug builds always use Google's test ads.
    Then **delete the `stackdrop.allowTestAds=true` line** from `gradle.properties`. While it is
@@ -158,14 +166,19 @@ one; anything that fails, note what you saw.
 3. ▶ 2× GEMS after a run (if offered) doubles on top of that, once.
 
 **Interstitials (without premium)**
-Rules: never on launch; only when starting a new run, once you have 8 or more runs in total, 3
-minutes into the session, 4 runs *and* 4 minutes since the last full-screen ad, and never right
-after a new best.
-1. Fresh session: play 8 short runs quickly. No interstitial in the first 3 minutes.
-2. Keep playing past 3 minutes: an interstitial shows when you tap to start a run.
-3. After it, the next one needs 4 more runs and 4 more minutes.
-4. Set a new best, then start a run: no interstitial that time.
-5. With premium: never any interstitial or banner.
+Rules: never on launch, and only when starting a new run. A run below score 10 owes an ad, and so
+does every 5th run in a row of 10 or more, counted separately per mode. An owed ad needs 8 or more
+runs in total, 60 seconds since the last interstitial, and no rewarded ad since the last run started.
+Skipping "Keep going?" on a fresh new best owes a high value ad, then the next 3 runs below 10 are
+free. Debug test ads all look alike, so watch logcat tag `Ads` for "Showing: High value interstitial".
+1. After 8 total runs, lose a run below 10 and tap RETRY: an interstitial shows.
+2. Lose another below 10 within 60 seconds of it: no ad on that RETRY. Wait past 60 seconds: it shows.
+3. Score 10 or more five times in a row in one mode: an ad shows only after the fifth. Runs in the
+   other mode don't count towards it.
+4. Beat your best at 10 or more and take "Keep going?": logcat shows the high value rewarded ad.
+5. Beat your best again and tap **No thanks**: RETRY shows the high value interstitial. The next 3
+   runs below 10 show no ad, and the 4th does.
+6. With premium: never any interstitial or banner.
 
 **Google sign-in**
 1. Profile → **SIGN IN WITH GOOGLE** → pick your account. The panel says "Signed in with Google"

@@ -61,7 +61,7 @@ Important facts:
 | Sign in with Google | Android **Credential Manager** + `googleid` library, then a Firebase `GoogleAuthProvider` credential. The anonymous account is linked so progress is kept. |
 | Leaderboards | Firestore boards per mode: **All time**, **This week**, **Friends**. Scores are written **only** by a Cloud Function that validates them. App Check (Play Integrity) is enforced. |
 | Friends | Friend codes plus requests (send, accept, decline, remove), handled by Cloud Functions. Friends board, and a "you passed a friend" moment on the game-over screen. |
-| Ads | Google Mobile Ads (AdMob) with **UMP consent**. Rewarded ads only by player choice; rare, capped interstitials between runs. **No banners.** |
+| Ads | Google Mobile Ads (AdMob) with **UMP consent**. Rewarded ads only by player choice; paced interstitials between runs. **No banners.** |
 | Calm themes | A new **Calm** theme family with matte blocks, soft gradients, slow ambient scenery, low glow, and comfortable contrast. Neon themes stay as a second family. Adds a **Reduce motion** setting. |
 
 Backend choice: **Firebase** (Auth, Firestore, Cloud Functions v2, App Check). Google Play Games Services is **not** used, because its friends and social features are too limited for this design. It can be added later only for achievements.
@@ -411,7 +411,7 @@ The owner wants a game that feels kind. Ads must never interrupt gameplay, never
 
 - **No banners.** They hurt the calm look and are easy to mis-tap on a full-screen canvas.
 - **Rewarded ads are always opt-in** and clearly labelled with a ▶ icon and the reward.
-- **Interstitials are rare and only between runs** (pacing rules below).
+- **Interstitials appear only between runs** (pacing rules below).
 - During development, **use Google's test ad unit IDs only**. Real IDs go in `BuildConfig` fields for release only.
   - Test App ID: `ca-app-pub-3940256099942544~3347511713`
   - Test Rewarded: `ca-app-pub-3940256099942544/5224354917`
@@ -436,6 +436,7 @@ The SETTINGS screen shows **PRIVACY OPTIONS** only when `privacyOptionsRequireme
 | `FREE_GEMS` | Themes screen pill "▶ +25" | +25 gems | 5 per day |
 
 - **Reward timing:** grant the reward on `onUserEarnedReward`, but apply it **after** the ad is dismissed (`GameEvent.AdClosed`), so the game resumes smoothly. Then play `SoundManager.UNLOCK` and `haptics.celebrate()`.
+- **High value second chance:** when the run beats the mode's best, the offer uses the high-floor rewarded unit if one is loaded, otherwise the normal one.
 - **Second chance** needs `fun canRevive(): Boolean` and `fun revive()` on `GameMode`.
   - Modes enter a "pending end" state: `isOver` is true, but `isFinished` waits until `Game` decides.
   - `Game` shows the overlay instead of the game-over screen when `canRevive()` and an ad is loaded.
@@ -444,12 +445,27 @@ The SETTINGS screen shows **PRIVACY OPTIONS** only when `privacyOptionsRequireme
 
 ### 8.4 Interstitial pacing (`AdsManager.maybeShowInterstitial`)
 
-Show one only when **all** of these are true:
-- the player is going from GAME_OVER to a new run (RETRY or a mode card), never mid-game and never on MENU entry;
-- at least **4 runs** since the last interstitial **and** at least **4 minutes** since the last full-screen ad of any type;
-- at least 8 runs have been played in total, and the session has lasted at least 3 minutes;
-- the run that just ended was **not** a new best, and the player did **not** watch a rewarded ad in the last 4 minutes;
+The rules live in `InterstitialPacing`. Both modes are endless, so runs are judged by score.
+
+An interstitial is owed after:
+- a **failed run**: score below 10;
+- every **5th successful run in a row** (score 10 or more), counted separately per mode. A failed run resets only its own mode's count.
+
+Show an owed ad only when **all** of these are true:
+- the player is starting a run (RETRY or a mode card), never mid-game and never on MENU entry;
+- at least 8 runs have been played in total;
+- at least **60 seconds** since the last interstitial;
+- no rewarded ad has shown since the last run started;
 - the ad is loaded; never wait for it.
+
+An owed ad that cannot show stays owed for the next run start.
+
+**Skipping a high value second chance.** When the player skips the offer on a run that beats the mode's best (No thanks, the countdown ends, or the ad closes without a reward):
+- a high value interstitial is owed for the next run start, from the high-floor unit, or the normal unit if that has none loaded;
+- a **grace period** then starts whether or not that ad could show: the next 3 failed runs owe no ad, and any ad still owed is dropped;
+- successful runs do not use up grace, and the 5-in-a-row ad still shows during it.
+
+Streak counts and grace last for the session only. Grace covers all modes.
 
 Make these constants remote-tunable later (Firebase Remote Config is optional). Preload the next ad after each show. Discard and reload ads older than 55 minutes.
 

@@ -9,8 +9,9 @@ updates it.
 - [x] Privacy policy hosted at <https://stackdrop-towers.vercel.app/privacy> (source: `site/`)
 - [x] Account deletion page hosted at <https://stackdrop-towers.vercel.app/delete-account>
 - [ ] Real AdMob IDs in `gradle.properties`: `stackdrop.admobAppId`, `stackdrop.admobBannerId`,
-      `stackdrop.admobRewardedId`, `stackdrop.admobInterstitialId` (without them release builds show
-      test ads and earn nothing)
+      `stackdrop.admobRewardedId`, `stackdrop.admobRewardedHighId`, `stackdrop.admobInterstitialId`,
+      `stackdrop.admobInterstitialHighId` (without them release builds show test ads and earn nothing)
+- [ ] High eCPM floor set on both high value ad units (see `NEXT_STEPS.md`, Part 2)
 - [ ] One-time product `premium` created and active (Monetize with Play → Products), and a payments
       profile set up (see `OWNER_SETUP.md` section 12)
 - [ ] GDPR consent message published in AdMob → Privacy & messaging

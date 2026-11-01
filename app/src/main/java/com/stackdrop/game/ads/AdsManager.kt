@@ -25,9 +25,10 @@ import com.stackdrop.game.platform.RewardPlacement
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Shows an adaptive banner in the strip below the game, and keeps one rewarded and one
- * interstitial ad preloaded to show on request; never waits for a load. A reward is reported as RewardEarned as soon as it is earned, and AdClosed follows when the ad
- * is gone, which is when the game applies it. Loading and showing happen on the UI thread; the
+ * Shows an adaptive banner in the strip below the game, and keeps rewarded and interstitial ads
+ * preloaded to show on request, each from a normal and a high-floor ad unit; never waits for a load.
+ * A reward is reported as RewardEarned as soon as it is earned, and AdClosed follows when the ad is
+ * gone, which is when the game applies it. Loading and showing happen on the UI thread; the
  * readiness flags are safe to read from the game thread.
  */
 class AdsManager(private val activity: Activity) {
@@ -41,15 +42,16 @@ class AdsManager(private val activity: Activity) {
     @Volatile private var released = false
     private val appContext = activity.applicationContext
 
-    @Volatile private var rewarded: RewardedAd? = null
-    @Volatile private var rewardedAt = 0L
-    @Volatile private var interstitial: InterstitialAd? = null
-    @Volatile private var interstitialAt = 0L
-    private var loadingRewarded = false
-    private var loadingInterstitial = false
+    private val rewarded = rewardedSlot("Rewarded ad", BuildConfig.AD_REWARDED_ID, RETRY_MS)
+    private val highRewarded = rewardedSlot("High value rewarded ad", BuildConfig.AD_REWARDED_HIGH_ID, HIGH_RETRY_MS)
+    private val interstitial = interstitialSlot("Interstitial", BuildConfig.AD_INTERSTITIAL_ID, RETRY_MS)
+    private val highInterstitial =
+        interstitialSlot("High value interstitial", BuildConfig.AD_INTERSTITIAL_HIGH_ID, HIGH_RETRY_MS)
 
-    val rewardedReady: Boolean get() = rewarded != null && fresh(rewardedAt)
-    val interstitialReady: Boolean get() = interstitial != null && fresh(interstitialAt)
+    val rewardedReady: Boolean get() = rewarded.ready
+    val highRewardedReady: Boolean get() = highRewarded.ready
+    val interstitialReady: Boolean get() = interstitial.ready
+    val highInterstitialReady: Boolean get() = highInterstitial.ready
 
     private var bannerSlot: FrameLayout? = null
     private var banner: AdView? = null
@@ -63,10 +65,12 @@ class AdsManager(private val activity: Activity) {
             handler.post {
                 if (value) {
                     removeBanner()
-                    interstitial = null
+                    interstitial.clear()
+                    highInterstitial.clear()
                 } else {
                     loadBanner()
-                    loadInterstitial()
+                    interstitial.load()
+                    highInterstitial.load()
                 }
             }
         }
@@ -88,8 +92,10 @@ class AdsManager(private val activity: Activity) {
                     if (released) return@post
                     sdkReady = true
                     MobileAds.setAppMuted(muted)
-                    loadRewarded()
-                    loadInterstitial()
+                    rewarded.load()
+                    highRewarded.load()
+                    interstitial.load()
+                    highInterstitial.load()
                     loadBanner()
                 }
             }
@@ -145,27 +151,29 @@ class AdsManager(private val activity: Activity) {
         }
     }
 
-    fun showRewarded(placement: RewardPlacement) = handler.post {
-        val ad = rewarded?.takeIf { fresh(rewardedAt) }
-        rewarded = null
+    fun showRewarded(placement: RewardPlacement, highValue: Boolean) = handler.post {
+        val slot = if (highValue) highRewarded else rewarded
+        val ad = slot.take()
         if (ad == null) {
             events(GameEvent.AdClosed(placement))
-            loadRewarded()
+            slot.load()
             return@post
         }
-        ad.fullScreenContentCallback = fullScreenCallback(placement) { loadRewarded() }
+        Log.i(TAG, "Showing: ${slot.label}")
+        ad.fullScreenContentCallback = fullScreenCallback(placement) { slot.load() }
         ad.show(activity) { events(GameEvent.RewardEarned(placement)) }
     }
 
-    fun showInterstitial() = handler.post {
-        val ad = interstitial?.takeIf { fresh(interstitialAt) }
-        interstitial = null
+    fun showInterstitial(highValue: Boolean) = handler.post {
+        val slot = if (highValue) highInterstitial else interstitial
+        val ad = slot.take()
         if (ad == null) {
             events(GameEvent.AdClosed(null))
-            loadInterstitial()
+            slot.load()
             return@post
         }
-        ad.fullScreenContentCallback = fullScreenCallback(null) { loadInterstitial() }
+        Log.i(TAG, "Showing: ${slot.label}")
+        ad.fullScreenContentCallback = fullScreenCallback(null) { slot.load() }
         ad.show(activity)
     }
 
@@ -186,48 +194,68 @@ class AdsManager(private val activity: Activity) {
         }
     }
 
-    private fun loadRewarded() {
-        if (released || !started.get() || loadingRewarded || (rewarded != null && fresh(rewardedAt))) return
-        loadingRewarded = true
-        RewardedAd.load(appContext, BuildConfig.AD_REWARDED_ID, AdRequest.Builder().build(),
-            object : RewardedAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedAd) {
-                    loadingRewarded = false
-                    if (released) return
-                    rewarded = ad
-                    rewardedAt = System.currentTimeMillis()
-                    scheduleRefresh { loadRewarded() }
-                }
+    private fun rewardedSlot(label: String, unitId: String, retryMs: Long) =
+        AdSlot<RewardedAd>(label, retryMs, allowed = { true }) { onLoaded, onFailed ->
+            RewardedAd.load(appContext, unitId, AdRequest.Builder().build(),
+                object : RewardedAdLoadCallback() {
+                    override fun onAdLoaded(ad: RewardedAd) = onLoaded(ad)
+                    override fun onAdFailedToLoad(error: LoadAdError) = onFailed(error)
+                })
+        }
 
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    loadingRewarded = false
-                    Log.i(TAG, "Rewarded ad not loaded: ${error.code} ${error.message}")
-                    if (!released) handler.postDelayed({ loadRewarded() }, RETRY_MS)
-                }
-            })
-    }
+    // Premium players never see interstitials, so none is loaded for them.
+    private fun interstitialSlot(label: String, unitId: String, retryMs: Long) =
+        AdSlot<InterstitialAd>(label, retryMs, allowed = { !premium }) { onLoaded, onFailed ->
+            InterstitialAd.load(appContext, unitId, AdRequest.Builder().build(),
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: InterstitialAd) = onLoaded(ad)
+                    override fun onAdFailedToLoad(error: LoadAdError) = onFailed(error)
+                })
+        }
 
-    private fun loadInterstitial() {
-        // Premium players never see interstitials, so none is loaded for them.
-        if (released || premium || !started.get() || loadingInterstitial) return
-        if (interstitial != null && fresh(interstitialAt)) return
-        loadingInterstitial = true
-        InterstitialAd.load(appContext, BuildConfig.AD_INTERSTITIAL_ID, AdRequest.Builder().build(),
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    loadingInterstitial = false
-                    if (released) return
-                    interstitial = ad
-                    interstitialAt = System.currentTimeMillis()
-                    scheduleRefresh { loadInterstitial() }
-                }
+    /** One preloaded full-screen ad: replaced before it goes stale, retried after a failed load. */
+    private inner class AdSlot<T : Any>(
+        val label: String,
+        private val retryMs: Long,
+        private val allowed: () -> Boolean,
+        private val request: (onLoaded: (T) -> Unit, onFailed: (LoadAdError) -> Unit) -> Unit,
+    ) {
+        @Volatile private var ad: T? = null
+        @Volatile private var loadedAt = 0L
+        private var loading = false
 
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    loadingInterstitial = false
-                    Log.i(TAG, "Interstitial not loaded: ${error.code} ${error.message}")
-                    if (!released) handler.postDelayed({ loadInterstitial() }, RETRY_MS)
-                }
-            })
+        val ready: Boolean get() = ad != null && fresh(loadedAt)
+
+        /** Hands over the ad if it is still usable; the slot is empty afterwards either way. */
+        fun take(): T? {
+            val taken = ad?.takeIf { fresh(loadedAt) }
+            ad = null
+            return taken
+        }
+
+        fun clear() {
+            ad = null
+        }
+
+        fun load() {
+            if (released || !allowed() || !started.get() || loading || ready) return
+            loading = true
+            request(::onLoaded, ::onFailed)
+        }
+
+        private fun onLoaded(loaded: T) {
+            loading = false
+            if (released) return
+            ad = loaded
+            loadedAt = System.currentTimeMillis()
+            scheduleRefresh { load() }
+        }
+
+        private fun onFailed(error: LoadAdError) {
+            loading = false
+            Log.i(TAG, "$label not loaded: ${error.code} ${error.message}")
+            if (!released) handler.postDelayed({ load() }, retryMs)
+        }
     }
 
     /** Loaded ads go stale after about an hour; replace them a little before that. */
@@ -237,8 +265,10 @@ class AdsManager(private val activity: Activity) {
 
     fun release() {
         released = true
-        rewarded = null
-        interstitial = null
+        rewarded.clear()
+        highRewarded.clear()
+        interstitial.clear()
+        highInterstitial.clear()
         handler.removeCallbacksAndMessages(null)
         banner?.destroy()
         banner = null
@@ -248,5 +278,8 @@ class AdsManager(private val activity: Activity) {
         const val TAG = "Ads"
         const val MAX_AGE_MS = 55 * 60_000L
         const val RETRY_MS = 60_000L
+
+        // High-floor units often have no ad at that price, so they are asked less often.
+        const val HIGH_RETRY_MS = 5 * 60_000L
     }
 }
