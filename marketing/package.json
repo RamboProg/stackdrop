@@ -8,6 +8,7 @@
     "assets": "node scripts/prepare-assets.mjs",
     "dev": "pnpm assets && remotion studio",
     "render": "pnpm assets && node scripts/render-all.mjs",
+    "brand": "pnpm assets && node scripts/render-brand.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test src/stack/sim.test.ts src/tower/sim.test.ts"
   },

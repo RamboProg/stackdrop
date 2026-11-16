@@ -1,4 +1,5 @@
-import { Composition } from "remotion";
+import { Composition, Folder, Still } from "remotion";
+import { GrabStacksLogo, GrabStacksMark } from "./brand/GrabStacksLogo.tsx";
 import { TOWER_COLLAPSE_DURATION, TowerCollapse } from "./ads/TowerCollapse.tsx";
 import { TOWER_STREAK_DURATION, TowerStreak } from "./ads/TowerStreak.tsx";
 import { TOWER_THEMES_DURATION, TowerThemes } from "./ads/TowerThemes.tsx";
@@ -9,5 +10,9 @@ export const Root: React.FC = () => (
     <Composition id="TowerStreak" component={TowerStreak} durationInFrames={TOWER_STREAK_DURATION} {...FORMAT} />
     <Composition id="TowerCollapse" component={TowerCollapse} durationInFrames={TOWER_COLLAPSE_DURATION} {...FORMAT} />
     <Composition id="TowerThemes" component={TowerThemes} durationInFrames={TOWER_THEMES_DURATION} {...FORMAT} />
+    <Folder name="Brand">
+      <Still id="GrabStacksLogo" component={GrabStacksLogo} width={1600} height={1600} defaultProps={{ background: true }} />
+      <Still id="GrabStacksMark" component={GrabStacksMark} width={1024} height={1024} defaultProps={{ background: true }} />
+    </Folder>
   </>
 );
