@@ -1,0 +1,28 @@
+{
+  "name": "stackdrop-marketing",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Stack Drop social media ads, rendered with Remotion",
+  "type": "module",
+  "scripts": {
+    "assets": "node scripts/prepare-assets.mjs",
+    "dev": "pnpm assets && remotion studio",
+    "render": "pnpm assets && node scripts/render-all.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/stack/sim.test.ts src/tower/sim.test.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.544",
+    "@remotion/fonts": "4.0.544",
+    "@remotion/media": "4.0.544",
+    "@remotion/renderer": "4.0.544",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "4.0.544"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
