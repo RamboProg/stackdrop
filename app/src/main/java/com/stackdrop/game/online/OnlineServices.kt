@@ -37,6 +37,12 @@ interface OnlineApi {
      */
     fun signOut(final: CloudPush?)
     fun claimName(name: String, avatar: Int)
+
+    /**
+     * Takes the Google account's [name] without asking; when it is taken, the server's first free
+     * suggestion. Posts ProfileLoaded, or NameUnchanged when no name could be taken.
+     */
+    fun adoptName(name: String, avatar: Int)
     fun setAvatar(avatar: Int)
 
     /** Posts the cached board right away when there is one, then a fresh copy unless it is under a minute old. */
@@ -313,6 +319,42 @@ class OnlineServices(context: Context) : OnlineApi {
         }
     }
 
+    override fun adoptName(name: String, avatar: Int) {
+        val repo = profiles ?: return
+        scope.launch {
+            val uid = auth?.uid
+            if (uid == null) {
+                events(GameEvent.NameUnchanged)
+                return@launch
+            }
+            try {
+                var claim = repo.claimName(name, avatar)
+                val taken = claim as? ProfileRepo.Claim.Refused
+                if (taken?.reason == "taken") {
+                    taken.suggestions.firstOrNull()?.let { claim = repo.claimName(it, avatar) }
+                }
+                when (val r = claim) {
+                    ProfileRepo.Claim.Ok -> events(GameEvent.ProfileLoaded(repo.load(uid)))
+                    is ProfileRepo.Claim.Refused -> {
+                        // Not worth a banner: the player didn't type this name and can still choose one.
+                        Log.i(TAG, "Google name not taken: ${r.reason}")
+                        events(GameEvent.NameUnchanged)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Taking the Google name failed", e)
+                events(GameEvent.NameUnchanged)
+            }
+        }
+    }
+
+    /** Asks the game to take the Google account's name, when it has one that fits the name rules. */
+    private fun offerGoogleName(repo: AuthRepo, replace: Boolean) {
+        NameRules.fromDisplayName(repo.googleName())?.let { events(GameEvent.GoogleName(it, replace)) }
+    }
+
     /** Called by the activity once Credential Manager returned a Google ID token. */
     fun completeGoogleSignIn(idToken: String) {
         val repo = auth ?: return
@@ -338,6 +380,8 @@ class OnlineServices(context: Context) : OnlineApi {
                     outcome.guestToken?.let { deleteGuest(it) }
                 }
             }
+            // After syncAccount, so the game already holds this account's profile when it decides.
+            offerGoogleName(repo, replace = true)
         }
     }
 
@@ -420,6 +464,8 @@ class OnlineServices(context: Context) : OnlineApi {
         events(GameEvent.CloudLoaded(uid, remote))
         runLogged("Profile load") { events(GameEvent.ProfileLoaded(profiles?.load(uid))) }
         runLogged("Friends load") { friends?.let { events(GameEvent.FriendsLoaded(it.load(uid))) } }
+        // A Google player who never chose a name gets the Google one.
+        if (!account.anonymous) auth?.let { offerGoogleName(it, replace = false) }
     }
 
     private suspend fun clearCredentials() {

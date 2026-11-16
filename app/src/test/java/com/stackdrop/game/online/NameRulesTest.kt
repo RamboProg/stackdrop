@@ -33,6 +33,26 @@ class NameRulesTest {
     }
 
     @Test
+    fun googleNamesAreFittedToTheRules() {
+        assertEquals("Mohamed Ismail", NameRules.fromDisplayName("Mohamed Ismail"))
+        assertEquals("Jose Muller", NameRules.fromDisplayName("José Müller"))
+        assertEquals("OBrien", NameRules.fromDisplayName("O'Brien"))
+        assertEquals("Anne Marie", NameRules.fromDisplayName("  Anne - Marie "))
+        // Cut at the last word break that fits; one long word is cut hard.
+        assertEquals("Alexandra", NameRules.fromDisplayName("Alexandra Konstantinova"))
+        assertEquals("A".repeat(16), NameRules.fromDisplayName("A".repeat(20)))
+        assertEquals("Bo Konstantinova", NameRules.fromDisplayName("Bo Konstantinova Smith"))
+    }
+
+    @Test
+    fun unusableGoogleNamesGiveNothing() {
+        assertNull(NameRules.fromDisplayName(null))
+        assertNull(NameRules.fromDisplayName("Li"))
+        assertNull(NameRules.fromDisplayName("محمد"))
+        assertNull(NameRules.fromDisplayName("__ab__"))
+    }
+
+    @Test
     fun takenNamesOfferSuggestions() {
         assertEquals("Taken. Try Mo_921 or Mo_92x", NameRules.message("taken", listOf("Mo_921", "Mo_92x")))
         assertEquals("That name is taken", NameRules.message("taken", emptyList()))
