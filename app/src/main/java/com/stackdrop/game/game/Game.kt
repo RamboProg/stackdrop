@@ -334,6 +334,8 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
                 nameBusy = false
                 hud.showBanner(event.message)
             }
+            is GameEvent.GoogleName -> adoptGoogleName(event.name, event.replace)
+            GameEvent.NameUnchanged -> nameBusy = false
             is GameEvent.TextEntered -> when (event.id) {
                 NAME_PROMPT -> submitName(event.value)
                 CODE_PROMPT -> submitFriendCode(event.value)
@@ -573,6 +575,14 @@ class Game(private val context: Context, val bridge: PlatformBridge, private val
         }
         nameBusy = true
         online.claimName(name, avatar)
+    }
+
+    /** A Google player is known by their Google name; they can still change it afterwards. */
+    private fun adoptGoogleName(name: String, replace: Boolean) {
+        val current = profile
+        if (nameBusy || current?.name == name || (current != null && !replace)) return
+        nameBusy = true
+        online.adoptName(name, avatar)
     }
 
     fun cycleAvatar() {

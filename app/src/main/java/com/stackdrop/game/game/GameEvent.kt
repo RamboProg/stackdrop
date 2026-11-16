@@ -33,6 +33,15 @@ sealed class GameEvent {
     /** A name change was refused; [message] is ready to show. */
     data class NameRejected(val message: String) : GameEvent()
 
+    /**
+     * The Google account's [name], fitted to the name rules. Right after a Google sign-in it
+     * [replace]s whatever name the player had; on a later launch it only fills in a missing one.
+     */
+    data class GoogleName(val name: String, val replace: Boolean) : GameEvent()
+
+    /** Taking the Google name didn't work (taken, refused or offline); the current name stays. */
+    data object NameUnchanged : GameEvent()
+
     /** The account and its cloud data are gone; the local save must be reset. */
     data object AccountDeleted : GameEvent()
 

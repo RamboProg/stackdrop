@@ -53,6 +53,13 @@ class AuthRepo(private val auth: FirebaseAuth) {
         return GoogleOutcome.Switched(guestToken)
     }
 
+    /** The name on the signed-in Google account, as Google has it; null for a guest. */
+    fun googleName(): String? {
+        val user = auth.currentUser ?: return null
+        val google = user.providerData.firstOrNull { it.providerId == GoogleAuthProvider.PROVIDER_ID } ?: return null
+        return google.displayName?.takeIf { it.isNotBlank() } ?: user.displayName
+    }
+
     fun signOut() = auth.signOut()
 
     private suspend fun guestTokenOf(user: FirebaseUser): String? = try {

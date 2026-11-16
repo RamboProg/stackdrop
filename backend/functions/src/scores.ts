@@ -1,4 +1,5 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { CALLABLE, db, payload, requireAuth } from "./common";
 import { checkStartedRun, utcDay } from "./runs";
@@ -27,7 +28,18 @@ export interface SubmitResult {
  */
 export const submitScore = onCall(CALLABLE, async (req): Promise<SubmitResult> => {
   const uid = requireAuth(req);
-  const run = parseRun(payload(req));
+  const data = payload(req);
+  try {
+    return await submit(uid, data);
+  } catch (e) {
+    // Without this a refused run leaves only a bare warning in the logs, with no reason or run.
+    if (e instanceof HttpsError) logger.warn("submitScore refused a run", { uid, code: e.code, reason: e.message, run: data });
+    throw e;
+  }
+});
+
+async function submit(uid: string, data: Record<string, unknown>): Promise<SubmitResult> {
+  const run = parseRun(data);
   if (!run) throw new HttpsError("invalid-argument", "bad-run");
   const check = checkRun(run);
   if (!check.ok) throw new HttpsError("invalid-argument", check.reason);
@@ -108,4 +120,4 @@ export const submitScore = onCall(CALLABLE, async (req): Promise<SubmitResult> =
     week,
     weeklyRank,
   };
-});
+}
